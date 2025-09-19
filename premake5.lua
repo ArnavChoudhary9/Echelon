@@ -24,12 +24,18 @@ project "Echelon"
     files
     {
         "%{prj.name}/**.h",
-        "%{prj.name}/Application/Application.cpp"
+        "%{prj.name}/**.cpp"
+    }
+
+    removefiles
+    {
+        "%{prj.name}/Application/EntryPoint.cpp"
     }
 
     includedirs
     {
-        "%{prj.name}"
+        "%{prj.name}",
+        "Vendor/spdlog/include"
     }
 
     filter "system:windows"
@@ -76,7 +82,8 @@ project "Sandbox"
     includedirs
     {
         "Echelon",
-        "Echelon/Application"
+        "Echelon/Application",
+        "Vendor/spdlog/include"
     }
 
     links
@@ -97,12 +104,14 @@ project "Sandbox"
         runtime "Debug"
         symbols "on"
         buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g" }
+        linkoptions { "-Wl,--allow-multiple-definition" }
 
     filter "configurations:Release"
         defines "ECHELON_RELEASE"
         runtime "Release"
         optimize "on"
         buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2" }
+        linkoptions { "-Wl,--allow-multiple-definition" }
 
     filter {}
         postbuildcommands

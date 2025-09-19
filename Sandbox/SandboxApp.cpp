@@ -7,7 +7,12 @@ public:
     ~SandboxApp() {}
 
     void Run() override {
-        std::cout << "Sandbox Application Running!" << std::endl;
+        Echelon::Logger::Init();
+        Echelon::Logger::GetCoreLogger()->warn("Initialized Log!");
+        int a = 5;
+        int b = 10;
+        Echelon::Logger::GetClientLogger()->info("Hello! Var={0}, {1}", a, b);
+        while (true);
     }
 };
 
