@@ -41,10 +41,7 @@ project "Echelon"
             "ECHELON_BUILD_DLL"
         }
 
-        postbuildcommands
-        {
-            ("copy \"%{cfg.buildtarget.abspath}\" \"%{wks.location}\\bin\\" .. outputdir .. "\\Sandbox\\\"")
-        }
+
 
     filter "configurations:Debug"
         defines "ECHELON_DEBUG"
@@ -106,3 +103,9 @@ project "Sandbox"
         runtime "Release"
         optimize "on"
         buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2" }
+
+    filter {}
+        postbuildcommands
+        {
+            ("copy \"..\\bin\\" .. outputdir .. "\\Echelon\\Echelon.dll\" \"%{cfg.buildtarget.directory}\"")
+        }
