@@ -8,9 +8,7 @@ make config=debug
 
 echo.
 echo Building Release configuration...
-mkdir bin\Release-windows-x86_64\Sandbox 2>nul
 make config=release
-copy bin\Release-windows-x86_64\Echelon\Echelon.dll bin\Release-windows-x86_64\Sandbox\ >nul
 
 echo.
 echo Build complete!
