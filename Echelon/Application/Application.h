@@ -3,10 +3,10 @@
 namespace Echelon {
     class Application {
     public:
-        Application();
-        virtual ~Application();
+        Application() = default;
+        virtual ~Application() = default;
 
-        virtual void Run();
+        virtual void Run() = 0;
     };
 }
 

@@ -2,15 +2,14 @@
 
 class SandboxApp : public Echelon::Application {
 public:
-    SandboxApp() {}
-    ~SandboxApp() {}
-
     void Run() override {
         Echelon::Logger logger("SandboxAppLogger");
         logger.AddSink(Echelon::ConsoleSink);
+        logger.AddSink(Echelon::FileSink("sandbox_log.log"));
 
         logger.Info("Sandbox Application Started");
         for (int i = 0; i < 5; ++i) {
+            logger.Trace("Trace message " + std::to_string(i));
             logger.Debug("Debug message " + std::to_string(i));
             logger.Info("Info message " + std::to_string(i));
             logger.Warn("Warning message " + std::to_string(i));

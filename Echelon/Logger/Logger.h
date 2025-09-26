@@ -10,7 +10,8 @@ namespace Echelon {
         Logger(const std::string& name);
         ~Logger();
 
-        void Info (const std::string& message) const;
+        void Trace(const std::string& message) const;
+        void Info(const std::string& message) const;
         void Debug(const std::string& message) const;
         void Warn(const std::string& message) const;
         void Error(const std::string& message) const;
@@ -22,4 +23,6 @@ namespace Echelon {
         std::string m_Name;
         std::shared_ptr<spdlog::logger> m_Logger;
     };
+
+    static std::shared_ptr<Logger> s_CoreLogger;
 }

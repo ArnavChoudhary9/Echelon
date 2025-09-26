@@ -45,3 +45,9 @@
 Makefile
 makefile
 *.mk
+
+# Log files
+*.log
+
+# VS Code files
+.vscode/

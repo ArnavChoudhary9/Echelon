@@ -3,6 +3,7 @@
 #include "spdlog/sinks/sink.h"
 
 #include "spdlog/sinks/stdout_color_sinks.h"
+#include "spdlog/sinks/basic_file_sink.h"
 
 namespace Echelon {
     class Sink {
@@ -29,5 +30,13 @@ namespace Echelon {
         void set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) { m_sink->set_formatter(std::move(sink_formatter)); }
     };
 
-    const std::shared_ptr<Sink> ConsoleSink = std::make_shared<Sink>(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+    static const std::shared_ptr<Sink> ConsoleSink = std::make_shared<Sink>(
+        std::make_shared<spdlog::sinks::stdout_color_sink_mt>()
+    );
+
+    const std::shared_ptr<Sink> FileSink(const std::string& filename) {
+        return std::make_shared<Sink>(
+            std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true)
+        );
+    }
 }
