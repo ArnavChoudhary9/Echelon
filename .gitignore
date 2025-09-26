@@ -50,4 +50,4 @@ makefile
 *.log
 
 # VS Code files
-.vscode/
+.vscode/*

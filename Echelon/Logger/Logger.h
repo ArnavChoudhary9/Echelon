@@ -1,28 +1,50 @@
 #pragma once
 
 #include "spdlog/spdlog.h"
+#include "spdlog/fmt/fmt.h"  // for fmt::runtime
 #include "Sink.h"
 #include <string>
+#include <utility> // for std::forward
 
 namespace Echelon {
     class Logger {
     public:
-        Logger(const std::string& name);
+        Logger(const std::string&);
         ~Logger();
 
-        void Trace(const std::string& message) const;
-        void Info(const std::string& message) const;
-        void Debug(const std::string& message) const;
-        void Warn(const std::string& message) const;
-        void Error(const std::string& message) const;
-        void Fatal(const std::string& message) const;
+        void Trace (const std::string&) const;
+        void Info  (const std::string&) const;
+        void Debug (const std::string&) const;
+        void Warn  (const std::string&) const;
+        void Error (const std::string&) const;
+        void Fatal (const std::string&) const;
 
-        void AddSink(const std::shared_ptr<Sink>& sink);
+        // Formatting overloads (runtime-checked) - use fmt::runtime to force runtime formatting
+        template<typename... Args>
+        void Trace(const std::string& fmt, Args&&... args) const { m_Logger->trace(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        template<typename... Args>
+        void Info(const std::string& fmt, Args&&... args) const { m_Logger->info(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        template<typename... Args>
+        void Debug(const std::string& fmt, Args&&... args) const { m_Logger->debug(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        template<typename... Args>
+        void Warn(const std::string& fmt, Args&&... args) const { m_Logger->warn(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        template<typename... Args>
+        void Error(const std::string& fmt, Args&&... args) const { m_Logger->error(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        template<typename... Args>
+        void Fatal(const std::string& fmt, Args&&... args) const { m_Logger->critical(fmt::runtime(fmt), std::forward<Args>(args)...); }
+
+        void AddSink(const std::shared_ptr<Sink>&);
 
     private:
         std::string m_Name;
         std::shared_ptr<spdlog::logger> m_Logger;
     };
 
+    // Core Logger
     static std::shared_ptr<Logger> s_CoreLogger;
 }
