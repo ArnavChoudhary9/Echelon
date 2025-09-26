@@ -1,6 +1,6 @@
 workspace "Echelon"
     architecture "x64"
-    startproject "Sandbox"
+    startproject "EchelonEditor"
 
     configurations
     {
@@ -61,9 +61,9 @@ project "Echelon"
         optimize "on"
         buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-fPIC" }
 
--- Sandbox Application (Executable)
-project "Sandbox"
-    location "Sandbox"
+-- EchelonEditor Application (Executable)
+project "EchelonEditor"
+    location "EchelonEditor"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++20"
