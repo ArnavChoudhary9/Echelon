@@ -1,17 +1,35 @@
 #include "Logger.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
 
-namespace Echelon {
-    // Define static member variables
-    std::shared_ptr<spdlog::logger> Logger::s_CoreLogger;
-    std::shared_ptr<spdlog::logger> Logger::s_ClientLogger;
+using namespace Echelon;
+
+Logger::Logger(const std::string& name)
+    : m_Name(name) {
+    m_Logger = spdlog::get(name);
+    if (!m_Logger) {
+        m_Logger = std::make_shared<spdlog::logger>(name, spdlog::sinks_init_list{});
+        m_Logger->set_level(spdlog::level::trace);
+        m_Logger->flush_on(spdlog::level::trace);
+        m_Logger->set_pattern("[%Y-%m-%d %H:%M:%S] [%n] [%^%l%$] %v");
+
+        // Register the logger with spdlog
+        spdlog::register_logger(m_Logger);
+    }
 }
 
-void Echelon::Logger::Init() {
-    spdlog::set_pattern("%^[%T] %n: %v%$");
-    s_CoreLogger = spdlog::stdout_color_mt("ECHELON");
-    s_CoreLogger->set_level(spdlog::level::trace);
+Logger::~Logger() {
+    spdlog::drop(m_Name);
+}
 
-    s_ClientLogger = spdlog::stdout_color_mt("APP");
-    s_ClientLogger->set_level(spdlog::level::trace);
+void Logger::Info(const std::string& message) const { m_Logger->info(message); }
+
+void Logger::Debug(const std::string& message) const { m_Logger->debug(message); }
+
+void Logger::Warn(const std::string& message) const { m_Logger->warn(message); }
+
+void Logger::Error(const std::string& message) const { m_Logger->error(message); }
+
+void Logger::Fatal(const std::string& message) const { m_Logger->critical(message); }
+
+void Logger::AddSink(const std::shared_ptr<Sink>& sink) {
+    m_Logger->sinks().push_back(sink->GetSink());
 }

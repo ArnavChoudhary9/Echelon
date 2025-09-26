@@ -1,18 +1,25 @@
 #pragma once
 
 #include "spdlog/spdlog.h"
+#include "Sink.h"
+#include <string>
 
 namespace Echelon {
+    class Logger {
+    public:
+        Logger(const std::string& name);
+        ~Logger();
 
-class Logger {
-public:
-    static void Init();
-    static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
-    static std::shared_ptr<spdlog::logger>& GetClientLogger() { return s_ClientLogger; }
+        void Info (const std::string& message) const;
+        void Debug(const std::string& message) const;
+        void Warn(const std::string& message) const;
+        void Error(const std::string& message) const;
+        void Fatal(const std::string& message) const;
 
-private:
-    static std::shared_ptr<spdlog::logger> s_CoreLogger;
-    static std::shared_ptr<spdlog::logger> s_ClientLogger;
-};
+        void AddSink(const std::shared_ptr<Sink>& sink);
 
-} // namespace Echelon
+    private:
+        std::string m_Name;
+        std::shared_ptr<spdlog::logger> m_Logger;
+    };
+}
