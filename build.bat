@@ -12,5 +12,5 @@ make config=release
 
 echo.
 echo Build complete!
-echo Debug executable: bin\Debug-windows-x86_64\Sandbox\Sandbox.exe
-echo Release executable: bin\Release-windows-x86_64\Sandbox\Sandbox.exe
+echo Debug executable: bin\Debug-windows-x86_64\EchelonEditor\EchelonEditor.exe
+echo Release executable: bin\Release-windows-x86_64\EchelonEditor\EchelonEditor.exe
