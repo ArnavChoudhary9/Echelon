@@ -43,6 +43,10 @@ namespace Echelon {
             }
         }
     };
+    
+    void Application::OnEvent(Event&& event) {
+        OnEvent(event);
+    }
 
     void Application::PushLayer(Layer* layer) {
         m_LayerStack.PushLayer(layer);

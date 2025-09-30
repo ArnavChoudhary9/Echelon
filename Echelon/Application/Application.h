@@ -72,6 +72,7 @@ namespace Echelon {
          * @param Event& event The event to handle.
          */
         void OnEvent(Event&);
+        void OnEvent(Event&&);
 
         // Layer management; Forwarded to LayerStack
         void PushLayer(Layer*);
