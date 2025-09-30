@@ -7,8 +7,17 @@
 #include <utility> // for std::forward
 
 namespace Echelon {
+    /**
+     * @brief Logger class for logging messages with various severity levels.
+     * 
+     */
     class Logger {
     public:
+        /**
+         * @brief Construct a new Logger object
+         * 
+         * @param name The name of the logger.
+         */
         Logger(const std::string&);
         ~Logger();
 
