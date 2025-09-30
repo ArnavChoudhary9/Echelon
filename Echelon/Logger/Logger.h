@@ -55,7 +55,4 @@ namespace Echelon {
         std::string m_Name;
         Ref<spdlog::logger> m_Logger;
     };
-
-    // Core Logger
-    static Ref<Logger> s_CoreLogger;
 }

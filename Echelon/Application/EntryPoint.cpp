@@ -1,21 +1,18 @@
 #include "../Core/Base.h"
 #include "Application.h"
-#include "Logger/Logger.h"
+#include "Core/Log.h"
 
 int main(int argc, char** argv) {
-    // Initialize Core Logger
-    Echelon::s_CoreLogger = Echelon::CreateRef<Echelon::Logger>("Echelon");
-    Echelon::s_CoreLogger->AddSink(Echelon::ConsoleSink);
-    Echelon::s_CoreLogger->AddSink(Echelon::FileSink("Echelon.log"));
+    INIT_ECHELON_LOGGER()
 
-    Echelon::s_CoreLogger->Trace("Creating Application . . .");
+    ECHELON_LOG_TRACE("Creating Application . . .");
     Echelon::ApplicationCommandLineArgs args(argc, argv);
     Echelon::Application* app = CreateApplication(args);
 
-    Echelon::s_CoreLogger->Trace("Running Application . . .");
+    ECHELON_LOG_TRACE("Running Application . . .");
     app->Run();
 
-    Echelon::s_CoreLogger->Trace("Deleting Application . . .");
+    ECHELON_LOG_TRACE("Deleting Application . . .");
     delete app;
     
     return 0;

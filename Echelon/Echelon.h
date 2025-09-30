@@ -13,6 +13,7 @@
 // --- Logger ---
 #include "Logger/Logger.h"
 #include "Logger/Sink.h"
+#include "Core/Log.h"
 
 // --- Events ---
 #include "Events/Event.h"

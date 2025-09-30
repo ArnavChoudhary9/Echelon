@@ -1,12 +1,12 @@
 #include "Echelon.h"
+#include "EditorOverlay.cpp"
 
 using namespace Echelon;
 
 class EchelonEditor : public Application {
 public:
     EchelonEditor(ApplicationConfig& config) : Application(config) {
-        // Initialize editor-specific layers and components here
-        m_Logger.Info("Echelon Editor initialized.");
+        PushOverlay(new EditorOverlay());
     }
 };
 
