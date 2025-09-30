@@ -3,7 +3,11 @@
 // Echelon.h : Include file for standard system include files,
 // or project specific include files.
 
+// --- Core ---
 #include "Core/Base.h"
+#include "Core/KeyCodes.h"
+#include "Core/MouseCodes.h"
+
 #include "Application/Application.h"
 
 // --- Logger ---
@@ -12,6 +16,9 @@
 
 // --- Events ---
 #include "Events/Event.h"
+#include "Events/ApplicationEvent.h"
+#include "Events/KeyEvents.h"
+#include "Events/MouseEvent.h"
 
 // --- Layer ---
 #include "Layer/Layer.h"

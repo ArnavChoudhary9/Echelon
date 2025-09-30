@@ -1,10 +1,12 @@
 #include "Echelon.h"
 
-class EchelonEditor : public Echelon::Application {
+using namespace Echelon;
+
+class EchelonEditor : public Application {
 public:
     EchelonEditor(int argc, char** argv) : Application(argc, argv), m_Logger("EchelonEditor") {
-        m_Logger.AddSink(Echelon::ConsoleSink);
-        m_Logger.AddSink(Echelon::FileSink("EchelonEditor.log"));
+        m_Logger.AddSink(ConsoleSink);
+        m_Logger.AddSink(FileSink("EchelonEditor.log"));
     }
     ~EchelonEditor() override = default;
 
@@ -17,13 +19,14 @@ public:
             m_Logger.Warn("Warning message: {}", i);
             m_Logger.Error("Error message: {}", i);
         }
+
         m_Logger.Fatal("Echelon Editor Ending");
     }
 
 private:
-    Echelon::Logger m_Logger;
+    Logger m_Logger;
 };
 
-Echelon::Application* CreateApplication(int argc, char** argv) {
+Application* CreateApplication(int argc, char** argv) {
     return new EchelonEditor(argc, argv);
 }
