@@ -2,7 +2,7 @@
 
 class EchelonEditor : public Echelon::Application {
 public:
-    EchelonEditor() : m_Logger("EchelonEditor") {
+    EchelonEditor(int argc, char** argv) : Application(argc, argv), m_Logger("EchelonEditor") {
         m_Logger.AddSink(Echelon::ConsoleSink);
         m_Logger.AddSink(Echelon::FileSink("EchelonEditor.log"));
     }
@@ -24,6 +24,6 @@ private:
     Echelon::Logger m_Logger;
 };
 
-Echelon::Application* CreateApplication() {
-    return new EchelonEditor();
+Echelon::Application* CreateApplication(int argc, char** argv) {
+    return new EchelonEditor(argc, argv);
 }

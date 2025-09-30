@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Layer/LayerStack.h"
+
 namespace Echelon {
     /**
      * @brief Represents the core application class. Extend this class to create a custom application.
@@ -7,7 +9,14 @@ namespace Echelon {
      */
     class Application {
     public:
-        Application() = default;
+        Application() = delete;
+        /**
+         * @brief Construct a new Application object
+         * 
+         * @param int argc Argument count from the command line.
+         * @param char** argv Argument vector from the command line.
+         */
+        Application(int argc, char** argv) : m_Argc(argc), m_Argv(argv), m_LayerStack() {}
         virtual ~Application() = default;
         
         /**
@@ -15,12 +24,20 @@ namespace Echelon {
          * 
          */
         virtual void Run() = 0;
+
+    protected:
+        int m_Argc;
+        char** m_Argv;
+
+        LayerStack m_LayerStack;
     };
 }
 
 /**
  * @brief Create a Application object
  * 
+ * @param int argc
+ * @param char** argv
  * @return Echelon::Application* 
  */
-extern Echelon::Application* CreateApplication();
+extern Echelon::Application* CreateApplication(int, char**);

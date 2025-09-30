@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
     Echelon::s_CoreLogger->AddSink(Echelon::FileSink("Echelon.log"));
 
     Echelon::s_CoreLogger->Trace("Creating Application . . .");
-    Echelon::Application* app = CreateApplication();
+    Echelon::Application* app = CreateApplication(argc, argv);
 
     Echelon::s_CoreLogger->Trace("Running Application . . .");
     app->Run();

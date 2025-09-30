@@ -1,5 +1,7 @@
 #include "LayerStack.h"
 
+#include <algorithm>
+
 namespace Echelon {
     LayerStack::~LayerStack() {
         for (Layer* layer : m_Layers) {

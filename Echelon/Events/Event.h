@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Echelon/Core/Base.h"
+#include "../Core/Base.h"
 
 namespace Echelon {
     /**
