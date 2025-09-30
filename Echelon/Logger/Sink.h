@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Core/Base.h"
+
 #include "spdlog/sinks/sink.h"
 
 #include "spdlog/sinks/stdout_color_sinks.h"
@@ -12,7 +14,7 @@ namespace Echelon {
      */
     class Sink {
     private:
-        std::shared_ptr<spdlog::sinks::sink> m_sink;
+        Ref<spdlog::sinks::sink> m_sink;
         
     public:
         /**
@@ -20,7 +22,7 @@ namespace Echelon {
          * 
          * @param sink 
          */
-        Sink(std::shared_ptr<spdlog::sinks::sink> sink) : m_sink(sink) {}
+        Sink(Ref<spdlog::sinks::sink> sink) : m_sink(sink) {}
 
         // Move constructor
         Sink(Sink&& other) noexcept : m_sink(std::move(other.m_sink)) {}
@@ -30,9 +32,9 @@ namespace Echelon {
         /**
          * @brief Get the Sink object
          * 
-         * @return std::shared_ptr<spdlog::sinks::sink> 
+         * @return Ref<spdlog::sinks::sink> 
          */
-        std::shared_ptr<spdlog::sinks::sink> GetSink() const { return m_sink; }
+        Ref<spdlog::sinks::sink> GetSink() const { return m_sink; }
         
         // These methods forward to the underlying spdlog sink
         void log(const spdlog::details::log_msg& msg) { m_sink->log(msg); }
@@ -48,17 +50,17 @@ namespace Echelon {
     // Predefined sinks
 
     // Default Console sink with color support
-    static const std::shared_ptr<Sink> ConsoleSink = std::make_shared<Sink>(
-        std::make_shared<spdlog::sinks::stdout_color_sink_mt>()
+    static const Ref<Sink> ConsoleSink = CreateRef<Sink>(
+        CreateRef<spdlog::sinks::stdout_color_sink_mt>()
     );
 
     /**
      * @brief Creates a file sink for logging to a file.
      * 
      * @param filename 
-     * @return const std::shared_ptr<Sink> 
+     * @return const Ref<Sink> 
      */
-    const std::shared_ptr<Sink> FileSink(const std::string& filename) {
+    inline const Ref<Sink> FileSink(const std::string& filename) {
         return std::make_shared<Sink>(
             std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true)
         );

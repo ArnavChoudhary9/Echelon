@@ -1,14 +1,16 @@
+#include "../Core/Base.h"
 #include "Application.h"
 #include "Logger/Logger.h"
 
 int main(int argc, char** argv) {
     // Initialize Core Logger
-    Echelon::s_CoreLogger = std::make_shared<Echelon::Logger>("Echelon");
+    Echelon::s_CoreLogger = Echelon::CreateRef<Echelon::Logger>("Echelon");
     Echelon::s_CoreLogger->AddSink(Echelon::ConsoleSink);
     Echelon::s_CoreLogger->AddSink(Echelon::FileSink("Echelon.log"));
 
     Echelon::s_CoreLogger->Trace("Creating Application . . .");
-    Echelon::Application* app = CreateApplication(argc, argv);
+    Echelon::ApplicationCommandLineArgs args(argc, argv);
+    Echelon::Application* app = CreateApplication(args);
 
     Echelon::s_CoreLogger->Trace("Running Application . . .");
     app->Run();

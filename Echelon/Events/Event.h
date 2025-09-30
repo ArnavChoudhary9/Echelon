@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../Core/Utilities.h"
+#include "../Core/Base.h"
+#include <iostream>
 #include <string>
 
 namespace Echelon {
@@ -80,5 +81,38 @@ namespace Echelon {
         }
 
         bool Handled = false;
+    };
+
+    // Overload the output stream operator for Event
+    inline std::ostream& operator<<(std::ostream& os, const Event& e) {
+        return os << e.ToString();
+    }
+
+    /**
+     * @brief Dispatches events to the appropriate event handler based on the event type.
+     * 
+     */
+    class EventDispatcher {
+    public:
+        /**
+         * @brief Construct a new Event Dispatcher object
+         * 
+         * @param event The event to be dispatched.
+         */
+        EventDispatcher(Event& event)
+            : m_Event(event) {}
+
+        // F will be deduced by the compiler
+        template<typename T, typename F>
+        bool Dispatch(const F& func) {
+            if (m_Event.GetEventType() == T::GetStaticType()) {
+                m_Event.Handled = func(static_cast<T&>(m_Event));
+                return true;
+            }
+            return false;
+        }
+
+    private:
+        Event& m_Event;
     };
 }

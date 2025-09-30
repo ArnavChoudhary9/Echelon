@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../Core/Base.h"
+
 #include "spdlog/spdlog.h"
 #include "spdlog/fmt/fmt.h"  // for fmt::runtime
 #include "Sink.h"
@@ -47,13 +49,13 @@ namespace Echelon {
         template<typename... Args>
         void Fatal(const std::string& fmt, Args&&... args) const { m_Logger->critical(fmt::runtime(fmt), std::forward<Args>(args)...); }
 
-        void AddSink(const std::shared_ptr<Sink>&);
+        void AddSink(const Ref<Sink>&);
 
     private:
         std::string m_Name;
-        std::shared_ptr<spdlog::logger> m_Logger;
+        Ref<spdlog::logger> m_Logger;
     };
 
     // Core Logger
-    static std::shared_ptr<Logger> s_CoreLogger;
+    static Ref<Logger> s_CoreLogger;
 }

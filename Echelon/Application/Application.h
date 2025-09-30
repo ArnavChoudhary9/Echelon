@@ -1,7 +1,9 @@
 #pragma once
 
 #include "../Layer/LayerStack.h"
+#include "../Logger/Logger.h"
 #include "../Events/Event.h"
+#include "../Events/ApplicationEvent.h"
 
 #include <cstdint>
 
@@ -59,14 +61,10 @@ namespace Echelon {
          * @param int argc Argument count from the command line.
          * @param char** argv Argument vector from the command line.
          */
-        Application(ApplicationConfig& config) : m_Config(config), m_LayerStack() {}
-        virtual ~Application() = default;
-        
-        /**
-         * @brief Starts the application's main loop.
-         * 
-         */
-        virtual void Run() = 0;
+        Application(ApplicationConfig&);
+        ~Application();
+
+        void Run();
 
         /**
          * @brief Handles events dispatched to the application.
@@ -75,9 +73,21 @@ namespace Echelon {
          */
         void OnEvent(Event&);
 
+        // Layer management; Forwarded to LayerStack
+        void PushLayer(Layer*);
+        void PushOverlay(Overlay*);
+        void PopLayer(Layer*);
+        void PopOverlay(Overlay*);
+
+        // Event Handlers
+        bool OnWindowClose(WindowCloseEvent&) { m_Running = false; return true; };
+
     protected:
+        bool m_Running = true;
+
         ApplicationConfig m_Config;
         LayerStack m_LayerStack;
+        Logger m_Logger;
     };
 }
 
@@ -88,4 +98,4 @@ namespace Echelon {
  * @param char** argv
  * @return Echelon::Application*
  */
-extern Echelon::Application* CreateApplication(int, char**);
+extern Echelon::Application* CreateApplication(Echelon::ApplicationCommandLineArgs&);
