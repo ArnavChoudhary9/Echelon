@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Core/Base.h"
+#include "../Core/Utilities.h"
 #include <string>
 
 namespace Echelon {

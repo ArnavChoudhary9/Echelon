@@ -4,9 +4,11 @@ using namespace Echelon;
 
 class EchelonEditor : public Application {
 public:
-    EchelonEditor(int argc, char** argv) : Application(argc, argv), m_Logger("EchelonEditor") {
+    EchelonEditor(ApplicationConfig& config) : Application(config), m_Logger("EchelonEditor") {
         m_Logger.AddSink(ConsoleSink);
         m_Logger.AddSink(FileSink("EchelonEditor.log"));
+
+        m_Logger.Debug("Argument Count: {}", config.Args.GetArgCount());
     }
     ~EchelonEditor() override = default;
 
@@ -28,5 +30,7 @@ private:
 };
 
 Application* CreateApplication(int argc, char** argv) {
-    return new EchelonEditor(argc, argv);
+    ApplicationConfig config;
+    config.Args = ApplicationCommandLineArgs(argc, argv);
+    return new EchelonEditor(config);
 }
