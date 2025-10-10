@@ -1,6 +1,6 @@
-#include "../Core/Base.h"
+#include "Echelon/Core/Base.h"
+#include "Echelon/Core/Log.h"
 #include "Application.h"
-#include "Core/Log.h"
 
 int main(int argc, char** argv) {
     INIT_ECHELON_LOGGER()

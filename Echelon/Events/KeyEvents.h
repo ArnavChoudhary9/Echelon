@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Event.h"
-#include "../Core/KeyCodes.h"
+#include "Echelon/Core/KeyCodes.h"
 
 #include <sstream>
 

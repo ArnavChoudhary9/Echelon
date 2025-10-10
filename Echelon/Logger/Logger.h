@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Core/Base.h"
+#include "Echelon/Core/Base.h"
 
 #include "spdlog/spdlog.h"
 #include "spdlog/fmt/fmt.h"  // for fmt::runtime

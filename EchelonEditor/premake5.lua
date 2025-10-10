@@ -18,10 +18,10 @@ project "EchelonEditor"
 
     includedirs
     {
-        "../Echelon",
-        "../Echelon/Application",
-        "../Vendor/spdlog/include",
-        "../Vendor/glm"
+        "%{wks.location}",
+        -- "%{wks.location}/Echelon/Application",
+        "%{wks.location}/Vendor/spdlog/include",
+        "%{wks.location}/Vendor/glm"
     }
 
     links

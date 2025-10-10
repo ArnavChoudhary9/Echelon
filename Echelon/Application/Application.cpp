@@ -1,5 +1,5 @@
 #include "Application.h"
-#include "../Core/Base.h"
+#include "Echelon/Core/Base.h"
 
 namespace Echelon {
     Application::Application(ApplicationConfig& config) 
