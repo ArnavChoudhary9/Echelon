@@ -8,7 +8,12 @@ namespace Echelon {
         m_Logger.AddSink(ConsoleSink);
         m_Logger.AddSink(FileSink(config.Name + ".log"));
 
-        m_Logger.Info("Application '{}' initialized with size {}x{}", m_Config.Name, m_Config.Width, m_Config.Height);
+        m_Logger.Info(
+            "Application '{}' initialized with size {}x{}",
+            m_Config.Name,
+            m_Config.WindowDimensions.Width,
+            m_Config.WindowDimensions.Height
+        );
     };
 
     Application::~Application() {

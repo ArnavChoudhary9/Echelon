@@ -14,6 +14,7 @@ Application* CreateApplication(ApplicationCommandLineArgs& args) {
     ApplicationConfig config;
     config.Name = "Echelon Editor";
     config.Args = args;
+    config.WindowDimensions = { 1280, 720 };
 
     return new EchelonEditor(config);
 }

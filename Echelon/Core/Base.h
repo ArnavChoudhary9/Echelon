@@ -32,4 +32,10 @@ namespace Echelon {
     constexpr Scope<T> CreateScope(Args&&... args) {
         return std::make_unique<T>(std::forward<Args>(args)...);
     }
+
+    // Simple struct to hold width and height dimensions
+    struct Dimension {
+        uint32_t Width;
+        uint32_t Height;
+    };
 }

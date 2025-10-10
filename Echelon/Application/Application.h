@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Core/Base.h"
 #include "../Layer/LayerStack.h"
 #include "../Logger/Logger.h"
 #include "../Events/Event.h"
@@ -44,8 +45,7 @@ namespace Echelon {
 
         std::string Name = "Echelon Application";
         ApplicationCommandLineArgs Args = ApplicationCommandLineArgs(0, nullptr);
-        uint16_t Width = 1280;
-        uint16_t Height = 720;
+        Dimension WindowDimensions = { 1280, 720 };
     };
 
     /**

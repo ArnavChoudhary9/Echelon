@@ -23,7 +23,8 @@ project "Echelon"
     includedirs
     {
         ".",
-        "../Vendor/spdlog/include"
+        "../Vendor/spdlog/include",
+        "../Vendor/glm"
     }
 
     links

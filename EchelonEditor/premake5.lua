@@ -20,7 +20,8 @@ project "EchelonEditor"
     {
         "../Echelon",
         "../Echelon/Application",
-        "../Vendor/spdlog/include"
+        "../Vendor/spdlog/include",
+        "../Vendor/glm"
     }
 
     links
