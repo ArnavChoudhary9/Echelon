@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "Echelon/Instrumentation/Instrumentation.h"
 #include "Echelon/Core/Base.h"
 
 namespace Echelon {
@@ -26,9 +27,11 @@ namespace Echelon {
     };
 
     void Application::Run() {
-        m_Logger.Trace("Application is starting...");
+        ECHELON_PROFILE_FUNCTION();
+        m_Logger.Trace("Application is running...");
 
         while (m_Running) {
+            ECHELON_PROFILE_SCOPE("Update Loop");
             for (Layer* layer : m_LayerStack) {
                 layer->OnUpdate(0.0f);
             }

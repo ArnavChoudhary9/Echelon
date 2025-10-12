@@ -46,10 +46,11 @@ project "Echelon"
         defines "ECHELON_DEBUG"
         runtime "Debug"
         symbols "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g", "-fPIC" }
+        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g", "-fPIC", "-save-temps" }
 
     filter "configurations:Release"
         defines "ECHELON_RELEASE"
         runtime "Release"
         optimize "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-fPIC" }
+        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-fPIC", "-save-temps" }
+        

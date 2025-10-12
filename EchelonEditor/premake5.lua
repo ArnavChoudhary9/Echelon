@@ -41,14 +41,14 @@ project "EchelonEditor"
         defines "ECHELON_DEBUG"
         runtime "Debug"
         symbols "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g" }
+        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g", "-save-temps" }
         linkoptions { "-Wl,--allow-multiple-definition" }
 
     filter "configurations:Release"
         defines "ECHELON_RELEASE"
         runtime "Release"
         optimize "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2" }
+        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-save-temps" }
         linkoptions { "-Wl,--allow-multiple-definition" }
 
     filter {}

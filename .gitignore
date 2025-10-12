@@ -38,6 +38,10 @@
 *.out
 *.app
 
+# Build Files
+bin/
+bin-int/
+
 # debug information files
 *.dwo
 
@@ -51,3 +55,6 @@ makefile
 
 # VS Code files
 .vscode/*
+
+# Profiling Results
+profile_*.json

@@ -5,6 +5,6 @@
 - [x] Refactor Application class to require command line arguments and update related entry point and creation functions.
 - [x] Add more event types.
 - [x] Implement event dispatching system.
-- [ ] Add unit tests for event handling.
 - [x] Test if we require `ToString` method in Event derived class.
-- [ ] Make Echelon and EchelonEditor separate projects for premake.
+- [x] Make Echelon and EchelonEditor separate projects for premake.
+- [ ] Make layer->OnAttach() and layer->OnDetach() part of LayerStack.
