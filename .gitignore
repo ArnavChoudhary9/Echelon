@@ -58,3 +58,6 @@ makefile
 
 # Profiling Results
 profile_*.json
+
+# Referance files
+refs/*
