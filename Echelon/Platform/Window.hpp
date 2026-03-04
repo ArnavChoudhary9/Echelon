@@ -132,6 +132,16 @@ namespace Echelon {
         virtual bool IsVSync() const = 0;
 
         /**
+         * @brief Get high-precision time in seconds from the platform.
+         *
+         * This uses the platform's native timer (e.g., glfwGetTime for GLFW),
+         * which is optimized for each OS and ideal for delta time calculations.
+         *
+         * @return Time in seconds since platform initialization.
+         */
+        virtual double GetTime() const = 0;
+
+        /**
          * @brief Register the function that will receive all window/input events.
          *
          * The Application layer typically sets this during initialisation so

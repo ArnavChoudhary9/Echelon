@@ -4,6 +4,7 @@
 #include "Core/Base.hpp"
 #include "Core/KeyCodes.hpp"
 #include "Core/MouseCodes.hpp"
+#include "Core/Clock.hpp"
 
 #include "Application/Application.hpp"
 

@@ -110,6 +110,7 @@ namespace Echelon {
 
         Scope<Window> m_Window;
         Scope<Input>  m_Input;
+        float m_FrameDuration = 1/60.0f; // Default to 60 FPS frame time, to avoid division by zero on the first frame.
 
     private:
         static Application* s_Instance;

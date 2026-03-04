@@ -54,6 +54,7 @@ namespace Echelon {
         // ---- Configuration ----
         void SetVSync(bool enabled) override;
         bool IsVSync() const override { return m_Data.VSync; }
+        double GetTime() const override;
         void SetEventCallback(const EventCallbackFn& callback) override { m_Data.EventCallback = callback; }
 
     private:

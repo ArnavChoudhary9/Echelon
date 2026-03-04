@@ -1,8 +1,9 @@
 #include "Application.hpp"
-#include "Echelon/Instrumentation/Instrumentation.hpp"
-#include "Echelon/Core/Base.hpp"
-#include "Echelon/Platform/Window.hpp"
-#include "Echelon/Platform/Input.hpp"
+#include "Core/Clock.hpp"
+#include "Instrumentation/Instrumentation.hpp"
+#include "Core/Base.hpp"
+#include "Platform/Window.hpp"
+#include "Platform/Input.hpp"
 
 namespace Echelon {
     Application* Application::s_Instance = nullptr;
@@ -48,23 +49,27 @@ namespace Echelon {
 
         while (m_Running) {
             ECHELON_PROFILE_SCOPE("Update Loop");
-
+            double frameStart = m_Window ? m_Window->GetTime() : 0.0;
+            
             // --- Poll platform events ---
             if (m_Window)
                 m_Window->PollEvents();
-
+            
             // --- Update layers ---
             for (auto& layer : m_LayerStack) {
-                layer->OnUpdate(0.0f);
+                layer->OnUpdate(m_FrameDuration);
             }
-
+            
             // --- Present ---
             if (m_Window)
                 m_Window->SwapBuffers();
-
+            
             // --- Check for close request ---
             if (m_Window && m_Window->ShouldClose())
                 m_Running = false;
+
+            double frameEnd = m_Window ? m_Window->GetTime() : 0.0;
+            m_FrameDuration = static_cast<float>(frameEnd - frameStart);
         }
     };
 
