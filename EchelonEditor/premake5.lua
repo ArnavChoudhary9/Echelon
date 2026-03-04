@@ -20,6 +20,7 @@ project "EchelonEditor"
     includedirs
     {
         "%{wks.location}",
+        "%{wks.location}/Echelon",
         "%{IncludeDir.spdlog}",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",

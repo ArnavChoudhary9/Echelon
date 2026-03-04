@@ -1,4 +1,6 @@
-#include "Echelon/Echelon.h"
+#pragma once
+
+#include "Echelon/Echelon.hpp"
 
 using namespace Echelon;
 

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Echelon/Core/Base.h"
-#include "Echelon/Layer/LayerStack.h"
-#include "Echelon/Logger/Logger.h"
-#include "Echelon/Events/Event.h"
-#include "Echelon/Events/ApplicationEvent.h"
+#include "Echelon/Core/Base.hpp"
+#include "Echelon/Layer/LayerStack.hpp"
+#include "Echelon/Logger/Logger.hpp"
+#include "Echelon/Events/Event.hpp"
+#include "Echelon/Events/ApplicationEvent.hpp"
 
 #include <cstdint>
 

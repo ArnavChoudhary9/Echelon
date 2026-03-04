@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Event.h"
-#include "Echelon/Core/MouseCodes.h"
+#include "Event.hpp"
+#include "Echelon/Core/MouseCodes.hpp"
 
 namespace Echelon {
     class MouseMovedEvent : public Event {

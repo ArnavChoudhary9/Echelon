@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Echelon/Core/Base.h"
+#include "Echelon/Core/Base.hpp"
 
 #include "spdlog/spdlog.h"
 #include "spdlog/fmt/fmt.h"  // for fmt::runtime
-#include "Sink.h"
+#include "Sink.hpp"
 #include <string>
 #include <utility> // for std::forward
 

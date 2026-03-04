@@ -1,6 +1,6 @@
-#include "Application.h"
-#include "Echelon/Instrumentation/Instrumentation.h"
-#include "Echelon/Core/Base.h"
+#include "Application.hpp"
+#include "Echelon/Instrumentation/Instrumentation.hpp"
+#include "Echelon/Core/Base.hpp"
 
 namespace Echelon {
     Application::Application(ApplicationConfig& config) 

@@ -32,6 +32,13 @@ namespace Echelon {
     constexpr Scope<T> CreateScope(Args&&... args) {
         return std::make_unique<T>(std::forward<Args>(args)...);
     }
+    
+    template<typename T>
+    using WeakRef = std::weak_ptr<T>;
+    template<typename T, typename... Args>
+    constexpr WeakRef<T> CreateWeakRef(const Ref<T>& ref) {
+        return std::weak_ptr<T>(ref);
+    }
 
     // Simple struct to hold width and height dimensions
     struct Dimension {

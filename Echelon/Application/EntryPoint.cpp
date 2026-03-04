@@ -1,7 +1,7 @@
-#include "Echelon/Core/Base.h"
-#include "Echelon/Core/Log.h"
-#include "Echelon/Instrumentation/Instrumentation.h"
-#include "Application.h"
+#include "Echelon/Core/Base.hpp"
+#include "Echelon/Core/Log.hpp"
+#include "Echelon/Instrumentation/Instrumentation.hpp"
+#include "Application.hpp"
 
 int main(int argc, char** argv) {
     // ------ Startup ------ //

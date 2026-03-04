@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Layer.h"
-#include "Overlay.h"
+#include "Layer.hpp"
+#include "Overlay.hpp"
 #include <vector>
 
 namespace Echelon {

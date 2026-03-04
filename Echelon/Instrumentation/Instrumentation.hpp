@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Echelon/Core/Log.h"
+#include "Echelon/Core/Log.hpp"
 #include <chrono>
 #include <string>
 #include <sstream>

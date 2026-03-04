@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Echelon/Core/Base.h"
+#include "Echelon/Core/Base.hpp"
 
 #include "spdlog/sinks/sink.h"
 

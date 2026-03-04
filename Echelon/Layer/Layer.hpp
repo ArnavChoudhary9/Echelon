@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Echelon/Events/Event.h"
+#include "Echelon/Events/Event.hpp"
 
 namespace Echelon {
     /**

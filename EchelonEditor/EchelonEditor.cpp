@@ -1,5 +1,5 @@
-#include "Echelon/Echelon.h"
-#include "EditorOverlay.cpp"
+#include "Echelon/Echelon.hpp"
+#include "EditorOverlay.hpp"
 
 using namespace Echelon;
 

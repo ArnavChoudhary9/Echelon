@@ -3,8 +3,8 @@
 // #define ECHELON_DEBUG
 
 #ifdef ECHELON_DEBUG
-    #include "Echelon/Logger/Logger.h"
-    #include "Echelon/Core/Base.h"
+    #include "Echelon/Logger/Logger.hpp"
+    #include "Echelon/Core/Base.hpp"
 
     namespace Echelon {
         // Core Logger
