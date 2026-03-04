@@ -53,6 +53,14 @@ namespace Echelon {
         virtual GraphicsBackend GetBackend() const = 0;
 
         /**
+         * @brief Initialise the backend's function loader (e.g. glad for OpenGL).
+         *
+         * Must be called after a valid rendering context is current.
+         * @return true on success.
+         */
+        virtual bool InitLoader() = 0;
+
+        /**
          * @brief Whether this API instance is running headless (no window).
          */
         virtual bool IsHeadless() const = 0;
@@ -87,6 +95,14 @@ namespace Echelon {
          * @return Scope<GraphicsAPI> Owning pointer to the API instance.
          */
         static Scope<GraphicsAPI> Create(GraphicsBackend backend);
+
+        /**
+         * @brief Get the default graphics backend for this build.
+         *
+         * Determined by the ECHELON_GRAPHICS_BACKEND compile-time define.
+         * Falls back to OpenGL if not specified.
+         */
+        static GraphicsBackend GetDefaultBackend();
     };
 
 } // namespace Echelon

@@ -29,12 +29,14 @@ project "Echelon"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.GLFW}",
+        "%{IncludeDir.glad}",
         "%{IncludeDir.yaml}",
     }
 
     links
     {
         "GLFW",
+        "glad",
         "yaml-cpp",
     }
 

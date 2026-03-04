@@ -7,7 +7,7 @@
     #include "Echelon/Core/Base.hpp"
 
     namespace Echelon {
-        // Core Logger
+        // Core Logger — static per TU; only the EntryPoint TU initialises it.
         static Ref<Logger> s_CoreLogger;
     }
 
@@ -15,12 +15,12 @@
                                   ::Echelon::s_CoreLogger->AddSink(::Echelon::ConsoleSink);\
                                   ::Echelon::s_CoreLogger->AddSink(::Echelon::FileSink("ECHELON.log"));
 
-    #define ECHELON_LOG_TRACE(...) ::Echelon::s_CoreLogger->Trace(__VA_ARGS__)
-    #define ECHELON_LOG_INFO(...)  ::Echelon::s_CoreLogger->Info(__VA_ARGS__)
-    #define ECHELON_LOG_DEBUG(...) ::Echelon::s_CoreLogger->Debug(__VA_ARGS__)
-    #define ECHELON_LOG_WARN(...)  ::Echelon::s_CoreLogger->Warn(__VA_ARGS__)
-    #define ECHELON_LOG_ERROR(...) ::Echelon::s_CoreLogger->Error(__VA_ARGS__)
-    #define ECHELON_LOG_FATAL(...) ::Echelon::s_CoreLogger->Fatal(__VA_ARGS__)
+    #define ECHELON_LOG_TRACE(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Trace(__VA_ARGS__); } while(0)
+    #define ECHELON_LOG_INFO(...)  do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Info(__VA_ARGS__); } while(0)
+    #define ECHELON_LOG_DEBUG(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Debug(__VA_ARGS__); } while(0)
+    #define ECHELON_LOG_WARN(...)  do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Warn(__VA_ARGS__); } while(0)
+    #define ECHELON_LOG_ERROR(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Error(__VA_ARGS__); } while(0)
+    #define ECHELON_LOG_FATAL(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Fatal(__VA_ARGS__); } while(0)
 
 #else
     #define INIT_ECHELON_LOGGER()

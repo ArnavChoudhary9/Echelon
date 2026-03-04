@@ -78,6 +78,17 @@ namespace Echelon {
          * @return true if the shader contains the given stage.
          */
         virtual bool HasStage(ShaderStage stage) const = 0;
+
+        // ---- Uniform setters ----
+        // These allow renderers to set shader parameters without knowing
+        // the concrete backend.  Default implementations are no-ops for
+        // backends that use descriptor-sets / uniform-buffers instead.
+
+        virtual void SetInt(const std::string& name, int value) const { (void)name; (void)value; }
+        virtual void SetFloat(const std::string& name, float value) const { (void)name; (void)value; }
+        virtual void SetVec3(const std::string& name, float x, float y, float z) const { (void)name; (void)x; (void)y; (void)z; }
+        virtual void SetVec4(const std::string& name, float x, float y, float z, float w) const { (void)name; (void)x; (void)y; (void)z; (void)w; }
+        virtual void SetMat4(const std::string& name, const float* value) const { (void)name; (void)value; }
     };
 
 } // namespace Echelon

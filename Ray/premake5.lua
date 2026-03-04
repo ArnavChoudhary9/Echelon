@@ -29,12 +29,19 @@ project "Ray"
         "%{wks.location}",
         "%{wks.location}/Echelon",
         "%{IncludeDir.glm}",
+        "%{IncludeDir.glad}",
+        "%{IncludeDir.GLFW}",
+        "%{IncludeDir.spdlog}",
     }
 
     links
     {
         "Echelon",
+        "glad",
     }
+
+    -- Allow multiple definitions when linking against engine DLL + system libs
+    linkoptions { "-Wl,--allow-multiple-definition" }
 
     -- Export symbols on Windows
     filter "system:windows"

@@ -35,6 +35,7 @@ namespace Echelon {
 
     // Forward declarations — renderer works with engine graphics abstractions
     class Scene;
+    class Device;
     class Buffer;
     class Texture;
     class Shader;
@@ -183,6 +184,37 @@ namespace Echelon {
          * @param height New height in pixels.
          */
         virtual void OnResize(uint32_t width, uint32_t height) = 0;
+
+        // ---- VSync ----
+
+        /**
+         * @brief Enable or disable vertical synchronisation.
+         * @param enabled true to enable VSync.
+         */
+        virtual void SetVSync(bool enabled) = 0;
+
+        /**
+         * @brief Query whether VSync is currently enabled.
+         */
+        virtual bool IsVSync() const = 0;
+
+        // ---- Resource access ----
+
+        /**
+         * @brief Get the GPU device owned by this renderer, so callers
+         *        can create buffers, textures, shaders, etc.
+         * @return Ref<Device> or nullptr if not initialised.
+         */
+        virtual Ref<Device> GetDevice() const = 0;
+
+        /**
+         * @brief Get the renderer's default (flat colour) pipeline.
+         *
+         * Convenience accessor so simple geometry can be drawn without
+         * the caller creating a pipeline from scratch.
+         * @return Ref<Pipeline> or nullptr.
+         */
+        virtual Ref<Pipeline> GetDefaultPipeline() const = 0;
 
         // ---- Queries ----
 

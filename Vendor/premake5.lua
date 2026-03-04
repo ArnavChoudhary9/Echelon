@@ -70,6 +70,41 @@ project "yaml-cpp"
     filter {}
 
 -- ============================================================
+-- glad  (Compiled static library — OpenGL loader)
+-- ============================================================
+project "glad"
+    location "glad/generated"
+    kind "StaticLib"
+    language "C"
+    staticruntime "off"
+    warnings "off"
+
+    targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "glad/generated/src/gl.c",
+        "glad/generated/include/glad/gl.h",
+        "glad/generated/include/KHR/khrplatform.h",
+    }
+
+    includedirs
+    {
+        "glad/generated/include",
+    }
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+
+    filter {}
+
+-- ============================================================
 -- GLFW  (Compiled static library)
 -- ============================================================
 project "GLFW"

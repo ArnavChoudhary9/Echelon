@@ -5,7 +5,8 @@
  * @brief "Ray" PBR Renderer — the default Echelon renderer plugin.
  *
  * This is a concrete RendererAPI implementation compiled as Renderer.dll.
- * It provides PBR (physically-based rendering) capabilities.
+ * It uses the engine's GraphicsAPI abstraction layer — no backend-specific
+ * code lives here.
  *
  * Best Practices:
  *  - All GPU work is encapsulated here; the engine only knows about RendererAPI.
@@ -15,6 +16,8 @@
  */
 
 #include "Echelon/Renderer/RendererAPI.hpp"
+#include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
+#include "Echelon/GraphicsAPI/Device.hpp"
 
 namespace Echelon {
 
@@ -52,11 +55,21 @@ namespace Echelon {
         // ---- Viewport ----
         void OnResize(uint32_t width, uint32_t height) override;
 
+        // ---- VSync ----
+        void SetVSync(bool enabled) override;
+        bool IsVSync() const override;
+
+        // ---- Resource access ----
+        Ref<Device>   GetDevice() const override          { return m_Device; }
+        Ref<Pipeline> GetDefaultPipeline() const override { return m_FlatPipeline; }
+
         // ---- Queries ----
         RendererInfo GetInfo() const override;
         RenderStats  GetStats() const override;
 
     private:
+        void CreateDefaultResources();
+
         bool m_Initialized = false;
 
         uint32_t m_ViewportWidth  = 0;
@@ -66,6 +79,18 @@ namespace Echelon {
         glm::mat4 m_ProjectionMatrix = glm::mat4(1.0f);
 
         RenderStats m_Stats;
+
+        // ---- Graphics API resources ----
+        Scope<GraphicsAPI>     m_GraphicsAPI;
+        Ref<Device>            m_Device;
+        Ref<CommandBuffer>     m_CommandBuffer;
+        Ref<RenderPass>        m_DefaultRenderPass;
+        Ref<Swapchain>         m_Swapchain;
+
+        // ---- Default shaders & pipeline ----
+        Ref<Shader>   m_BasicShader;
+        Ref<Shader>   m_FlatShader;
+        Ref<Pipeline> m_FlatPipeline;
     };
 
 } // namespace Echelon

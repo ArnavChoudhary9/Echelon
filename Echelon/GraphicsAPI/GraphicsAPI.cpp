@@ -1,5 +1,6 @@
 #include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
 #include "Echelon/Core/Base.hpp"
+#include "Echelon/Platform/Backends/OpenGL/OpenGLGraphicsAPI.hpp"
 
 namespace Echelon {
 
@@ -11,8 +12,7 @@ namespace Echelon {
                 // TODO: return CreateScope<HeadlessGraphicsAPI>();
                 break;
             case GraphicsBackend::OpenGL:
-                // TODO: return CreateScope<OpenGLGraphicsAPI>();
-                break;
+                return CreateScope<OpenGLGraphicsAPI>();
             case GraphicsBackend::Vulkan:
                 // TODO: return CreateScope<VulkanGraphicsAPI>();
                 break;
@@ -28,6 +28,22 @@ namespace Echelon {
         }
 
         return nullptr;
+    }
+
+    GraphicsBackend GraphicsAPI::GetDefaultBackend()
+    {
+#if defined(ECHELON_GRAPHICS_BACKEND_VULKAN)
+        return GraphicsBackend::Vulkan;
+#elif defined(ECHELON_GRAPHICS_BACKEND_DX12)
+        return GraphicsBackend::DirectX12;
+#elif defined(ECHELON_GRAPHICS_BACKEND_METAL)
+        return GraphicsBackend::Metal;
+#elif defined(ECHELON_GRAPHICS_BACKEND_HEADLESS)
+        return GraphicsBackend::Headless;
+#else
+        // Default to OpenGL
+        return GraphicsBackend::OpenGL;
+#endif
     }
 
 } // namespace Echelon

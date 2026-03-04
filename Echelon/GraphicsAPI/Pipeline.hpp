@@ -259,6 +259,12 @@ namespace Echelon {
     {
     public:
         virtual ~Pipeline() = default;
+
+        /**
+         * @brief Get the shader program associated with this pipeline.
+         * @return Ref<Shader> Handle to the shader, or nullptr.
+         */
+        virtual Ref<Shader> GetShader() const = 0;
     };
 
     /**

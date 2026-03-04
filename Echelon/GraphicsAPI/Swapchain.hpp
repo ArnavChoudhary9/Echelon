@@ -96,6 +96,12 @@ namespace Echelon {
         /** @brief Whether this swapchain runs in headless (off-screen) mode. */
         virtual bool IsHeadless() const = 0;
 
+        /** @brief Enable or disable vertical synchronisation at runtime. */
+        virtual void SetVSync(bool enabled) = 0;
+
+        /** @brief Query whether VSync is currently enabled. */
+        virtual bool IsVSync() const = 0;
+
         /**
          * @brief Get the current active index within the swapchain image ring.
          * @return uint32_t Index of the current image (0-based).
