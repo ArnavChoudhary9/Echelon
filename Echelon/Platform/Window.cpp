@@ -2,7 +2,7 @@
 #include "Echelon/Core/Base.hpp"
 
 // Backend headers — add new backends here
-// #include "Echelon/Platform/Backends/GLFW/GLFWWindow.hpp"
+#include "Echelon/Platform/Backends/GLFW/GLFWWindow.hpp"
 
 namespace Echelon {
 
@@ -11,8 +11,7 @@ namespace Echelon {
         switch (desc.Backend)
         {
             case PlatformBackend::GLFW:
-                // TODO: return CreateScope<GLFWWindow>(desc);
-                break;
+                return CreateScope<GLFWWindow>(desc);
             case PlatformBackend::Win32:
                 // TODO: return CreateScope<Win32Window>(desc);
                 break;

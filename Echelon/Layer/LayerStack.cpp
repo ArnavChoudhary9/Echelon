@@ -37,4 +37,14 @@ namespace Echelon {
             m_Layers.erase(it);
         }
     }
+
+    bool LayerStack::OnEvent(Event& event) {
+        for (auto it = m_Layers.rbegin(); it != m_Layers.rend(); ++it) {
+            (*it)->OnEvent(event);
+            if (event.Handled) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

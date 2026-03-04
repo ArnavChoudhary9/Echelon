@@ -5,9 +5,12 @@
 #include "Echelon/Platform/Input.hpp"
 
 namespace Echelon {
+    Application* Application::s_Instance = nullptr;
+
     Application::Application(ApplicationConfig& config) 
         : m_Config(config), m_LayerStack(), m_Logger(config.Name)
     {
+        s_Instance = this;
         m_Logger.AddSink(ConsoleSink);
         m_Logger.AddSink(FileSink(config.Name + ".log"));
 
@@ -76,12 +79,7 @@ namespace Echelon {
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<WindowCloseEvent>(EH_BIND_EVENT_FN(OnWindowClose));
 
-        for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
-            (*--it)->OnEvent(event);
-            if (event.Handled) {
-                break;
-            }
-        }
+        m_LayerStack.OnEvent(event);
     };
     
     void Application::OnEvent(Event&& event) {

@@ -28,7 +28,17 @@ project "Echelon"
         "%{IncludeDir.spdlog}",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
+        "%{IncludeDir.GLFW}",
     }
+
+    links
+    {
+        "GLFW",
+    }
+
+    -- Windows system libs needed by GLFW
+    filter "system:windows"
+        links { "gdi32", "opengl32" }
 
     -- Engine-specific defines
     filter "system:windows"

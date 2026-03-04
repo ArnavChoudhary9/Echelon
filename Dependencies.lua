@@ -9,3 +9,4 @@ IncludeDir = {}
 IncludeDir["spdlog"]  = "%{wks.location}/Vendor/spdlog/include"
 IncludeDir["glm"]     = "%{wks.location}/Vendor/glm"
 IncludeDir["entt"]    = "%{wks.location}/Vendor/entt/single_include"
+IncludeDir["GLFW"]    = "%{wks.location}/Vendor/GLFW/include"

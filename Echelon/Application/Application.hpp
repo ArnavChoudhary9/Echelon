@@ -69,6 +69,12 @@ namespace Echelon {
         Application(ApplicationConfig&);
         ~Application();
 
+        /**
+         * @brief Get the singleton Application instance.
+         * @return Application& Reference to the running application.
+         */
+        static Application& Get() { return *s_Instance; }
+
         void Run();
 
         /**
@@ -104,6 +110,9 @@ namespace Echelon {
 
         Scope<Window> m_Window;
         Scope<Input>  m_Input;
+
+    private:
+        static Application* s_Instance;
     };
 }
 
