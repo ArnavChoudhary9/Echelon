@@ -1,6 +1,8 @@
 #include "Application.hpp"
 #include "Echelon/Instrumentation/Instrumentation.hpp"
 #include "Echelon/Core/Base.hpp"
+#include "Echelon/Platform/Window.hpp"
+#include "Echelon/Platform/Input.hpp"
 
 namespace Echelon {
     Application::Application(ApplicationConfig& config) 
@@ -15,6 +17,22 @@ namespace Echelon {
             m_Config.WindowDimensions.Width,
             m_Config.WindowDimensions.Height
         );
+
+        // ---- Create platform Window ----
+        WindowDesc winDesc = config.WindowDescription;
+        winDesc.Title  = config.Name;
+        winDesc.Width  = config.WindowDimensions.Width;
+        winDesc.Height = config.WindowDimensions.Height;
+        m_Window = Window::Create(winDesc);
+
+        if (m_Window)
+        {
+            m_Window->SetEventCallback(EH_BIND_EVENT_FN(OnEvent));
+            m_Logger.Info("Platform window created ({}x{})", winDesc.Width, winDesc.Height);
+        }
+
+        // ---- Create platform Input ----
+        m_Input = Input::Create(winDesc.Backend);
     };
 
     Application::~Application() {
@@ -32,9 +50,23 @@ namespace Echelon {
 
         while (m_Running) {
             ECHELON_PROFILE_SCOPE("Update Loop");
+
+            // --- Poll platform events ---
+            if (m_Window)
+                m_Window->PollEvents();
+
+            // --- Update layers ---
             for (Layer* layer : m_LayerStack) {
                 layer->OnUpdate(0.0f);
             }
+
+            // --- Present ---
+            if (m_Window)
+                m_Window->SwapBuffers();
+
+            // --- Check for close request ---
+            if (m_Window && m_Window->ShouldClose())
+                m_Running = false;
         }
     };
 

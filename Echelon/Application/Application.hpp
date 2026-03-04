@@ -5,6 +5,8 @@
 #include "Echelon/Logger/Logger.hpp"
 #include "Echelon/Events/Event.hpp"
 #include "Echelon/Events/ApplicationEvent.hpp"
+#include "Echelon/Platform/Window.hpp"
+#include "Echelon/Platform/Input.hpp"
 
 #include <cstdint>
 
@@ -46,6 +48,9 @@ namespace Echelon {
         std::string Name = "Echelon Application";
         ApplicationCommandLineArgs Args = ApplicationCommandLineArgs(0, nullptr);
         Dimension WindowDimensions = { 1280, 720 };
+
+        /** Platform window creation parameters. */
+        WindowDesc WindowDescription;
     };
 
     /**
@@ -80,6 +85,13 @@ namespace Echelon {
         void PopLayer(Layer*);
         void PopOverlay(Overlay*);
 
+        /**
+         * @brief Get the application's Window.
+         * @return Window& Reference to the platform window.
+         */
+        Window& GetWindow() { return *m_Window; }
+        const Window& GetWindow() const { return *m_Window; }
+
         // Event Handlers
         bool OnWindowClose(WindowCloseEvent&) { m_Running = false; return true; };
 
@@ -89,6 +101,9 @@ namespace Echelon {
         ApplicationConfig m_Config;
         LayerStack m_LayerStack;
         Logger m_Logger;
+
+        Scope<Window> m_Window;
+        Scope<Input>  m_Input;
     };
 }
 

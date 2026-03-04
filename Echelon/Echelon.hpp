@@ -29,3 +29,6 @@
 
 // --- Graphics Abstraction Layer ---
 #include "GraphicsAPI/GraphicsIncludes.hpp"
+
+// --- Platform Abstraction Layer ---
+#include "Platform/PlatformIncludes.hpp"
