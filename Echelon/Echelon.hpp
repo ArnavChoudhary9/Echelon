@@ -26,3 +26,6 @@
 // --- ECS, Scene and Projects ---
 #include "ECS/Entity.hpp"
 #include "Scene/Scene.hpp"
+
+// --- Graphics Abstraction Layer ---
+#include "GraphicsAPI/GraphicsIncludes.hpp"

@@ -17,5 +17,6 @@ namespace Echelon {
 
     private:
         Ref<EntityRegistry> m_EntityRegistry;
+        Ref<Scene> m_SelfRef;
     };
 }
