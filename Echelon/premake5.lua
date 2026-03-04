@@ -1,10 +1,10 @@
--- Echelon Engine (DLL)
+-- ============================================================
+-- Echelon Engine  (Shared Library / DLL)
+-- ============================================================
+
 project "Echelon"
     location "."
     kind "SharedLib"
-    language "C++"
-    cppdialect "C++20"
-    staticruntime "off"
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
     objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
@@ -12,45 +12,48 @@ project "Echelon"
     files
     {
         "**.h",
-        "**.cpp"
+        "**.hpp",
+        "**.cpp",
     }
 
     removefiles
     {
-        "Application/EntryPoint.cpp"
+        "Application/EntryPoint.cpp",
     }
 
     includedirs
     {
         ".",
         "%{wks.location}",
-        "%{wks.location}/Vendor/spdlog/include",
-        "%{wks.location}/Vendor/glm"
+        "%{IncludeDir.spdlog}",
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.entt}",
+        "%{IncludeDir.GLFW}",
+        "%{IncludeDir.glad}",
+        "%{IncludeDir.yaml}",
     }
 
     links
     {
-        -- Add any vendor libraries that need linking here
+        "GLFW",
+        "glad",
+        "yaml-cpp",
     }
 
+    -- Windows system libs needed by GLFW
     filter "system:windows"
-        systemversion "latest"
+        links { "gdi32", "opengl32" }
 
-        defines
-        {
-            "ECHELON_PLATFORM_WINDOWS",
-            "ECHELON_BUILD_DLL"
-        }
+    -- Engine-specific defines
+    filter "system:windows"
+        defines { "ECHELON_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
 
+    -- Shared libs need position-independent code
     filter "configurations:Debug"
-        defines "ECHELON_DEBUG"
-        runtime "Debug"
-        symbols "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g", "-fPIC", "-save-temps" }
+        buildoptions { "-fPIC" }
 
     filter "configurations:Release"
-        defines "ECHELON_RELEASE"
-        runtime "Release"
-        optimize "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-fPIC", "-save-temps" }
+        buildoptions { "-fPIC" }
+
+    filter {}
         

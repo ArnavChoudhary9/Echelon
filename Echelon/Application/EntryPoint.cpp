@@ -1,7 +1,7 @@
-#include "Echelon/Core/Base.h"
-#include "Echelon/Core/Log.h"
-#include "Echelon/Instrumentation/Instrumentation.h"
-#include "Application.h"
+#include "Echelon/Core/Base.hpp"
+#include "Echelon/Core/Log.hpp"
+#include "Echelon/Instrumentation/Instrumentation.hpp"
+#include "Application.hpp"
 
 int main(int argc, char** argv) {
     // ------ Startup ------ //
@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     ECHELON_LOG_TRACE("Creating Application . . .");
     Echelon::ApplicationCommandLineArgs args(argc, argv);
-    Echelon::Application* app;
+    Echelon::Scope<Echelon::Application> app;
     {
         ECHELON_PROFILE_SCOPE("CreateApplication");
         app = CreateApplication(args);
@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     // ------ Shutdown ------ //
     ECHELON_PROFILE_BEGIN_SESSION("Shutdown", "profile_shutdown.json");
     ECHELON_LOG_TRACE("Deleting Application . . .");
-    delete app;
+    app.reset();
     ECHELON_PROFILE_END_SESSION(); // End shutdown profiling session
     
     return 0;
