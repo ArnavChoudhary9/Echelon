@@ -1,10 +1,10 @@
--- EchelonEditor Application (Executable)
+-- ============================================================
+-- EchelonEditor  (Console Application)
+-- ============================================================
+
 project "EchelonEditor"
     location "."
     kind "ConsoleApp"
-    language "C++"
-    cppdialect "C++20"
-    staticruntime "off"
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
     objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
@@ -12,47 +12,32 @@ project "EchelonEditor"
     files
     {
         "**.h",
+        "**.hpp",
         "**.cpp",
-        "../Echelon/Application/EntryPoint.cpp"
+        "../Echelon/Application/EntryPoint.cpp",
     }
 
     includedirs
     {
         "%{wks.location}",
-        -- "%{wks.location}/Echelon/Application",
-        "%{wks.location}/Vendor/spdlog/include",
-        "%{wks.location}/Vendor/glm"
+        "%{IncludeDir.spdlog}",
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.entt}",
     }
 
     links
     {
-        "Echelon"
+        "Echelon",
     }
 
+    -- Linker: allow multiple definitions (needed when EntryPoint is shared)
+    linkoptions { "-Wl,--allow-multiple-definition" }
+
+    -- Copy the engine DLL next to the editor executable after build
     filter "system:windows"
-        systemversion "latest"
-
-        defines
-        {
-            "ECHELON_PLATFORM_WINDOWS"
-        }
-
-    filter "configurations:Debug"
-        defines "ECHELON_DEBUG"
-        runtime "Debug"
-        symbols "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-g", "-save-temps" }
-        linkoptions { "-Wl,--allow-multiple-definition" }
-
-    filter "configurations:Release"
-        defines "ECHELON_RELEASE"
-        runtime "Release"
-        optimize "on"
-        buildoptions { "-Wall", "-Wextra", "-Wpedantic", "-O2", "-save-temps" }
-        linkoptions { "-Wl,--allow-multiple-definition" }
-
-    filter {}
         postbuildcommands
         {
-            ("copy \"..\\bin\\" .. outputdir .. "\\Echelon\\Echelon.dll\" \"%{cfg.buildtarget.directory}\"")
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}")
         }
+
+    filter {}

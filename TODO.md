@@ -7,4 +7,4 @@
 - [x] Implement event dispatching system.
 - [x] Test if we require `ToString` method in Event derived class.
 - [x] Make Echelon and EchelonEditor separate projects for premake.
-- [ ] Make layer->OnAttach() and layer->OnDetach() part of LayerStack.
+- [x] Make layer->OnAttach() and layer->OnDetach() part of LayerStack.

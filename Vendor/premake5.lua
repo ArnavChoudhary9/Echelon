@@ -1,68 +1,29 @@
--- Vendor Dependencies
-group "Vendor"
+-- ============================================================
+-- Vendor Dependencies (header-only libraries)
+-- ============================================================
+-- These "None" projects exist purely so IDEs can browse vendor
+-- source.  All include paths are centralised in Dependencies.lua.
+-- No compilation is performed for header-only libs.
+-- ============================================================
 
--- spdlog (Header-only library, no compilation needed)
--- This project is mainly for organization and include directories
-project "spdlog"
-    location "spdlog"
-    kind "None"
-    language "C++"
+local function header_only_project(name, loc, fileGlobs)
+    project(name)
+        location(loc)
+        kind "None"
+        language "C++"
+        files(fileGlobs)
+end
 
-    targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
-    objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+header_only_project("spdlog", "spdlog", {
+    "spdlog/include/spdlog/**.h",
+    "spdlog/include/spdlog/**.hpp",
+})
 
-    files
-    {
-        "spdlog/include/spdlog/**.h",
-        "spdlog/include/spdlog/**.hpp",
-        "spdlog/src/**.cpp"
-    }
+header_only_project("glm", "glm", {
+    "glm/glm/**.hpp",
+    "glm/glm/**.inl",
+})
 
-    includedirs
-    {
-        "spdlog/include"
-    }
-
-    filter "system:windows"
-        systemversion "latest"
-
-    filter "configurations:Debug"
-        runtime "Debug"
-        symbols "on"
-
-    filter "configurations:Release"
-        runtime "Release"
-        optimize "on"
-        
--- GLM (Header-only math library)
-project "glm"
-    location "glm"
-    kind "None"
-    language "C++"
-
-    targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
-    objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
-
-    files
-    {
-        "glm/glm/**.hpp",
-        "glm/glm/**.inl"
-    }
-
-    includedirs
-    {
-        "glm"
-    }
-
-    filter "system:windows"
-        systemversion "latest"
-
-    filter "configurations:Debug"
-        runtime "Debug"
-        symbols "on"
-
-    filter "configurations:Release"
-        runtime "Release"
-        optimize "on"
-
-group ""
+header_only_project("entt", "entt", {
+    "entt/single_include/entt/**.hpp",
+})

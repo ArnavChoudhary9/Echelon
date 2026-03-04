@@ -25,3 +25,7 @@
 #include "Layer/Layer.h"
 #include "Layer/Overlay.h"
 #include "Layer/LayerStack.h"
+
+// --- ECS, Scene and Projects ---
+#include "ECS/EntityRegistry.hpp"
+#include "Scene/Scene.hpp"
