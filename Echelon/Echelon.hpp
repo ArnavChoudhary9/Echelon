@@ -26,7 +26,11 @@
 
 // --- ECS, Scene and Projects ---
 #include "ECS/Entity.hpp"
+#include "ECS/Components.hpp"
 #include "Scene/Scene.hpp"
+#include "Scene/SceneSerializer.hpp"
+#include "Scene/SceneGraph.hpp"
+#include "Project/Project.hpp"
 
 // --- Graphics Abstraction Layer ---
 #include "GraphicsAPI/GraphicsIncludes.hpp"

@@ -24,11 +24,17 @@ project "EchelonEditor"
         "%{IncludeDir.spdlog}",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml}",
     }
 
     links
     {
         "Echelon",
+    }
+
+    defines
+    {
+        "YAML_CPP_STATIC_DEFINE",
     }
 
     -- Linker: allow multiple definitions (needed when EntryPoint is shared)

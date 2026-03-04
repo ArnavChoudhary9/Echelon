@@ -7,6 +7,7 @@
 #include "Echelon/Events/ApplicationEvent.hpp"
 #include "Echelon/Platform/Window.hpp"
 #include "Echelon/Platform/Input.hpp"
+#include "Echelon/Project/Project.hpp"
 
 #include <cstdint>
 
@@ -113,6 +114,13 @@ namespace Echelon {
         float m_FrameDuration = 1/60.0f; // Default to 60 FPS frame time, to avoid division by zero on the first frame.
 
     private:
+        /**
+         * @brief Initialize or load the project based on command-line arguments.
+         *        If argv[1] points to an existing .ehproj or directory with one,
+         *        load it. Otherwise create a new project. Defaults to ./DefaultProject/.
+         */
+        void InitializeProject();
+
         static Application* s_Instance;
     };
 }

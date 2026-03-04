@@ -29,6 +29,47 @@ header_only_project("entt", "entt", {
 })
 
 -- ============================================================
+-- yaml-cpp  (Compiled static library)
+-- ============================================================
+project "yaml-cpp"
+    location "yaml"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "off"
+    warnings "off"
+
+    targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "yaml/src/**.h",
+        "yaml/src/**.cpp",
+        "yaml/include/**.h",
+    }
+
+    includedirs
+    {
+        "yaml/include",
+    }
+
+    defines
+    {
+        "YAML_CPP_STATIC_DEFINE",
+    }
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+
+    filter {}
+
+-- ============================================================
 -- GLFW  (Compiled static library)
 -- ============================================================
 project "GLFW"

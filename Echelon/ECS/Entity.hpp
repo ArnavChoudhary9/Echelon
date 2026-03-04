@@ -1,7 +1,12 @@
 #pragma once
 
 #include "Core/Base.hpp"
+#include <cassert>
 #include "entt/entt.hpp"
+
+#ifndef EC_CORE_ASSERT
+    #define EC_CORE_ASSERT(x, msg) assert((x) && (msg))
+#endif
 
 namespace Echelon {
     using EntityRegistry = entt::registry;

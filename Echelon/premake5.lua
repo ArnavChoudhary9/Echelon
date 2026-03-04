@@ -29,11 +29,13 @@ project "Echelon"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.GLFW}",
+        "%{IncludeDir.yaml}",
     }
 
     links
     {
         "GLFW",
+        "yaml-cpp",
     }
 
     -- Windows system libs needed by GLFW
@@ -42,7 +44,7 @@ project "Echelon"
 
     -- Engine-specific defines
     filter "system:windows"
-        defines { "ECHELON_BUILD_DLL" }
+        defines { "ECHELON_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
 
     -- Shared libs need position-independent code
     filter "configurations:Debug"

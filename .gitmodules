@@ -10,3 +10,6 @@
 [submodule "Vendor/GLFW"]
 	path = Vendor/GLFW
 	url = https://github.com/glfw/glfw.git
+[submodule "Vendor/yaml"]
+	path = Vendor/yaml
+	url = https://github.com/jbeder/yaml-cpp.git
