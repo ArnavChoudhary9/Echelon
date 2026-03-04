@@ -44,6 +44,10 @@ group "Engine"
     include "Echelon"
 group ""
 
+group "Renderer"
+    include "Ray"
+group ""
+
 group "App"
     include "EchelonEditor"
 group ""

@@ -40,11 +40,12 @@ project "EchelonEditor"
     -- Linker: allow multiple definitions (needed when EntryPoint is shared)
     linkoptions { "-Wl,--allow-multiple-definition" }
 
-    -- Copy the engine DLL next to the editor executable after build
+    -- Copy engine + renderer DLLs next to the editor executable after build
     filter "system:windows"
         postbuildcommands
         {
-            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}")
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/Renderer.dll %{cfg.buildtarget.directory}"),
         }
 
     filter {}

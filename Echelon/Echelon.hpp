@@ -32,6 +32,9 @@
 #include "Scene/SceneGraph.hpp"
 #include "Project/Project.hpp"
 
+// --- Renderer Plugin ---
+#include "Renderer/Renderer.hpp"
+
 // --- Graphics Abstraction Layer ---
 #include "GraphicsAPI/GraphicsIncludes.hpp"
 
