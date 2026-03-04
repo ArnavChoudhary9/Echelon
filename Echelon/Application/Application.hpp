@@ -86,10 +86,10 @@ namespace Echelon {
         void OnEvent(Event&&);
 
         // Layer management; Forwarded to LayerStack
-        void PushLayer(Layer*);
-        void PushOverlay(Overlay*);
-        void PopLayer(Layer*);
-        void PopOverlay(Overlay*);
+        void PushLayer(Ref<Layer> layer);
+        void PushOverlay(Ref<Overlay> overlay);
+        void PopLayer(Ref<Layer> layer);
+        void PopOverlay(Ref<Overlay> overlay);
 
         /**
          * @brief Get the application's Window.
@@ -121,6 +121,6 @@ namespace Echelon {
  * 
  * @param int argc
  * @param char** argv
- * @return Echelon::Application*
+ * @return Echelon::Scope<Application>
  */
-extern Echelon::Application* CreateApplication(Echelon::ApplicationCommandLineArgs&);
+extern Echelon::Scope<Echelon::Application> CreateApplication(Echelon::ApplicationCommandLineArgs&);

@@ -40,11 +40,6 @@ namespace Echelon {
 
     Application::~Application() {
         m_Running = false;
-
-        for (Layer* layer : m_LayerStack) {
-            layer->OnDetach();
-            delete layer;
-        }
     };
 
     void Application::Run() {
@@ -59,7 +54,7 @@ namespace Echelon {
                 m_Window->PollEvents();
 
             // --- Update layers ---
-            for (Layer* layer : m_LayerStack) {
+            for (auto& layer : m_LayerStack) {
                 layer->OnUpdate(0.0f);
             }
 
@@ -86,25 +81,19 @@ namespace Echelon {
         OnEvent(event);
     }
 
-    void Application::PushLayer(Layer* layer) {
+    void Application::PushLayer(Ref<Layer> layer) {
         m_LayerStack.PushLayer(layer);
-        layer->OnAttach();
     }
 
-    void Application::PushOverlay(Overlay* overlay) {
+    void Application::PushOverlay(Ref<Overlay> overlay) {
         m_LayerStack.PushOverlay(overlay);
-        overlay->OnAttach();
     }
 
-    void Application::PopLayer(Layer* layer) {
+    void Application::PopLayer(Ref<Layer> layer) {
         m_LayerStack.PopLayer(layer);
-        layer->OnDetach();
-        delete layer;
     }
 
-    void Application::PopOverlay(Overlay* overlay) {
+    void Application::PopOverlay(Ref<Overlay> overlay) {
         m_LayerStack.PopOverlay(overlay);
-        overlay->OnDetach();
-        delete overlay;
     }
 }
