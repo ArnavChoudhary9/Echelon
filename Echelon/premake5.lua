@@ -49,11 +49,13 @@ project "Echelon"
         defines { "ECHELON_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
 
     -- Shared libs need position-independent code
+    -- -Wa,-mbig-obj is required on MinGW for translation units with heavy
+    -- template usage (yaml-cpp + entt) that exceed the PE/COFF section limit.
     filter "configurations:Debug"
-        buildoptions { "-fPIC" }
+        buildoptions { "-fPIC", "-Wa,-mbig-obj" }
 
     filter "configurations:Release"
-        buildoptions { "-fPIC" }
+        buildoptions { "-fPIC", "-Wa,-mbig-obj" }
 
     filter {}
         

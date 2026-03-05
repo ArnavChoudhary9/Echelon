@@ -15,8 +15,7 @@ namespace Echelon {
 
         // 1. Build a node for every entity that has an IDComponent.
         auto idView = registry.view<IDComponent>();
-        for (auto entity : idView) {
-            const auto& id = idView.get<IDComponent>(entity);
+        for (auto&& [entity, id] : idView.each()) {
             uint64_t uuid  = static_cast<uint64_t>(id.ID);
 
             SceneGraphNode node;

@@ -32,6 +32,8 @@ project "Ray"
         "%{IncludeDir.glad}",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.spdlog}",
+        "%{IncludeDir.yaml}",
+        "%{IncludeDir.entt}",
     }
 
     links
@@ -45,7 +47,7 @@ project "Ray"
 
     -- Export symbols on Windows
     filter "system:windows"
-        defines { "RAY_BUILD_DLL" }
+        defines { "RAY_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
 
     -- PIC needed for shared libraries on all platforms
     filter "configurations:Debug"

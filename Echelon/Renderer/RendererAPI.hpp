@@ -35,6 +35,7 @@ namespace Echelon {
 
     // Forward declarations — renderer works with engine graphics abstractions
     class Scene;
+    class SceneGraph;
     class Device;
     class Buffer;
     class Texture;
@@ -147,6 +148,20 @@ namespace Echelon {
          * @brief Finalise scene rendering (post-process, resolve MSAA, etc.).
          */
         virtual void EndScene() = 0;
+
+        // ---- Scene-driven rendering ----
+
+        /**
+         * @brief Render all MeshComponent entities in the scene using the
+         *        internal RenderGraph.
+         *
+         * The RenderGraph caches draw commands and only rebuilds when
+         * entity meshes or transforms change.  For scenes that are
+         * mostly static, this reduces per-frame CPU cost to O(1).
+         *
+         * @param scene The scene whose entities should be rendered.
+         */
+        virtual void RenderScene(const Ref<Scene>& scene) = 0;
 
         // ---- Draw commands ----
 

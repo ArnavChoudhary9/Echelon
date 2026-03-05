@@ -36,9 +36,8 @@ namespace Echelon {
 
     void Scene::RemoveEntity(const std::string& name) {
         auto view = m_EntityRegistry->view<TagComponent>();
-        for (auto entity : view) {
-            const auto& tag = view.get<TagComponent>(entity).Tag;
-            if (tag == name) {
+        for (auto&& [entity, tag] : view.each()) {
+            if (tag.Tag == name) {
                 m_EntityRegistry->destroy(entity);
                 m_SceneGraph.MarkDirty();
                 return;
@@ -102,8 +101,8 @@ namespace Echelon {
     // ------------------------------------------------------------------
     Entity Scene::FindEntityByUUID(UUID uuid) {
         auto view = m_EntityRegistry->view<IDComponent>();
-        for (auto entity : view) {
-            if (view.get<IDComponent>(entity).ID == uuid) {
+        for (auto&& [entity, id] : view.each()) {
+            if (id.ID == uuid) {
                 return Entity(entity, CreateWeakRef(m_SelfRef));
             }
         }

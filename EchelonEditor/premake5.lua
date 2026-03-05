@@ -46,6 +46,12 @@ project "EchelonEditor"
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/Renderer.dll %{cfg.buildtarget.directory}"),
+            -- Copy shader files next to the executable so the renderer can find them
+            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.frag.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.frag.glsl %{cfg.buildtarget.directory}/Shaders",
         }
 
     filter {}

@@ -1,6 +1,8 @@
 #include "Project.hpp"
 
 #include "Core/Log.hpp"
+#include "Scene/Scene.hpp"
+#include "Scene/SceneSerializer.hpp"
 
 #include "yaml-cpp/yaml.h"
 
@@ -43,6 +45,18 @@ namespace Echelon {
         project->m_Config.RootDirectory = std::filesystem::absolute(projectDir);
         project->DeriveSubPaths();
         project->EnsureDirectories();
+
+        // Create a default empty scene if the Scenes directory is empty
+        auto defaultSceneRelative = std::string("Default.ehscene");
+        auto defaultScenePath = project->m_Config.ScenesDirectory / defaultSceneRelative;
+        if (!std::filesystem::exists(defaultScenePath)) {
+            auto scene = CreateRef<Scene>("Default Scene");
+            SceneSerializer serializer(scene);
+            serializer.Serialize(defaultScenePath);
+            project->m_Config.StartScene = "Scenes/" + defaultSceneRelative;
+            ECHELON_LOG_INFO("[Project] Created default scene: {}", defaultScenePath.string());
+        }
+
         project->Save();
 
         s_ActiveProject = project;

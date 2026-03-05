@@ -25,8 +25,24 @@ public:
             return;
         }
 
-        // ---- Create a triangle vertex buffer ----
-        // Flat shader layout: vec3 position + vec3 color
+        // ---- Create a test scene with a camera and a triangle entity ----
+        m_Scene = CreateRef<Scene>("Editor Scene");
+
+        // ---- Camera entity ----
+        Entity cameraEntity = m_Scene->AddEntity("Camera");
+        auto& camTransform = cameraEntity.GetComponent<TransformComponent>();
+        camTransform.Position = { 0.0f, 0.0f, 3.0f };
+
+        auto& cam = cameraEntity.AddComponent<CameraComponent>();
+        cam.Primary = true;
+        cam.Cam.SetPerspective(60.0f, 0.1f, 1000.0f);
+        cam.Cam.SetViewportSize(window.GetWidth(), window.GetHeight());
+        cam.Cam.SetPosition(camTransform.Position);
+
+        // ---- Triangle entity ----
+        Entity triangleEntity = m_Scene->AddEntity("Triangle");
+
+        // Build triangle mesh data: vec3 position + vec3 color
         float triangleVertices[] = {
             // positions          // colors
              0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top    (red)
@@ -41,11 +57,25 @@ public:
         vbDesc.InitialData = triangleVertices;
         vbDesc.DebugName   = "TriangleVB";
 
-        m_TriangleVB = renderer->GetDevice()->CreateBuffer(vbDesc);
+        auto vb = renderer->GetDevice()->CreateBuffer(vbDesc);
+
+        // Attach MeshComponent to the entity
+        auto& mesh        = triangleEntity.AddComponent<MeshComponent>();
+        mesh.VertexBuffer = vb;
+        mesh.VertexCount  = 3;
+        mesh.MeshSource   = "Triangle";
+        mesh.Invalidate();
+
+        // Attach MaterialComponent (uses default flat pipeline from renderer)
+        auto& mat        = triangleEntity.AddComponent<MaterialComponent>();
+        mat.ShaderName   = "Flat";
+        mat.PipelineRef  = renderer->GetDefaultPipeline();
+        mat.AlbedoColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+        mat.Invalidate();
     }
 
     virtual void OnDetach() override {
-        m_TriangleVB = nullptr;
+        m_Scene = nullptr;
         m_RendererLoader.Unload();
     }
 
@@ -55,21 +85,32 @@ public:
         auto* renderer = m_RendererLoader.Get();
         if (!renderer) return;
 
-        // Identity matrices — NDC coordinates
-        glm::mat4 identity(1.0f);
+        // Find the primary camera in the scene
+        glm::mat4 viewMatrix(1.0f);
+        glm::mat4 projMatrix(1.0f);
+
+        auto registry = m_Scene->GetEntityRegistry().lock();
+        if (registry) {
+            auto camView = registry->view<CameraComponent, TransformComponent>();
+            for (auto&& [entity, cc, tc] : camView.each()) {
+                if (cc.Primary) {
+                    cc.Cam.SetPosition(tc.Position);
+                    cc.Cam.SetRotation(tc.Rotation);
+                    viewMatrix = cc.Cam.GetViewMatrix();
+                    projMatrix = cc.Cam.GetProjectionMatrix();
+                    break;
+                }
+            }
+        }
+
         ClearValue clear;
         clear.Color = { 0.1f, 0.1f, 0.12f, 1.0f };
 
-        renderer->BeginFrame(identity, identity, clear);
-        renderer->BeginScene(nullptr);
+        renderer->BeginFrame(viewMatrix, projMatrix, clear);
+        renderer->BeginScene(m_Scene);
 
-        // Draw the triangle using the renderer's default flat pipeline
-        if (m_TriangleVB) {
-            renderer->Draw(m_TriangleVB,
-                           renderer->GetDefaultPipeline(),
-                           identity,
-                           3);
-        }
+        // Render all mesh entities in the scene via the render graph
+        renderer->RenderScene(m_Scene);
 
         renderer->EndScene();
         renderer->EndFrame();
@@ -82,6 +123,18 @@ public:
             if (renderer) {
                 renderer->OnResize(e.GetWidth(), e.GetHeight());
             }
+
+            // Update camera viewport
+            auto registry = m_Scene->GetEntityRegistry().lock();
+            if (registry) {
+                auto camView = registry->view<CameraComponent>();
+                for (auto&& [entity, cc] : camView.each()) {
+                    if (!cc.FixedAspect) {
+                        cc.Cam.SetViewportSize(e.GetWidth(), e.GetHeight());
+                    }
+                }
+            }
+
             return false;
         });
     }
@@ -92,5 +145,5 @@ public:
 
 private:
     RendererLoader m_RendererLoader;
-    Ref<Buffer>    m_TriangleVB;
+    Ref<Scene>     m_Scene;
 };

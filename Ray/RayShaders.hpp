@@ -2,21 +2,64 @@
 
 /**
  * @file RayShaders.hpp
- * @brief Embedded GLSL shader sources for the Ray PBR renderer.
+ * @brief Shader source loader for the Ray renderer.
  *
- * These are intentionally kept simple for initial bring-up.
- * A vertex shader that applies model-view-projection transforms,
- * and a fragment shader that outputs a solid colour modulated
- * by a basic diffuse lighting calculation.
+ * Loads GLSL shader sources from external files in the Shaders/ directory
+ * next to the renderer DLL.  Falls back to embedded sources if the files
+ * cannot be found (e.g. during testing or standalone builds).
  */
+
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 
 namespace Echelon::RayShaders {
 
-    // ================================================================
-    // Basic vertex shader  (layout: position, normal, texcoord)
-    // ================================================================
+    // ------------------------------------------------------------------
+    // File loader helper
+    // ------------------------------------------------------------------
 
-    inline constexpr const char* BasicVertexShader = R"glsl(
+    /**
+     * @brief Read an entire text file into a std::string.
+     * @return The file contents, or an empty string on failure.
+     */
+    inline std::string ReadFile(const std::filesystem::path& path) {
+        std::ifstream file(path, std::ios::in);
+        if (!file.is_open()) return {};
+        std::stringstream ss;
+        ss << file.rdbuf();
+        return ss.str();
+    }
+
+    /**
+     * @brief Try to load a shader file relative to the executable.
+     *
+     * Searches in:
+     *   1. <cwd>/Shaders/<filename>          (shipped layout)
+     *   2. <cwd>/../../../Ray/Shaders/<filename>  (dev source tree)
+     *
+     * @return File contents or empty string.
+     */
+    inline std::string LoadShaderFile(const std::string& filename) {
+        // 1. Shipped layout — Shaders/ next to the exe (post-build copy)
+        auto p1 = std::filesystem::path("Shaders") / filename;
+        auto content = ReadFile(p1);
+        if (!content.empty()) return content;
+
+        // 2. Dev layout — running from bin/<Config>/<App>/ in the source tree
+        auto p2 = std::filesystem::path("../../../Ray/Shaders") / filename;
+        content = ReadFile(p2);
+        if (!content.empty()) return content;
+
+        return {};
+    }
+
+    // ==================================================================
+    // Embedded fallbacks (compile-time constants)
+    // ==================================================================
+
+    inline constexpr const char* BasicVertexShaderFallback = R"glsl(
 #version 460 core
 
 layout(location = 0) in vec3 a_Position;
@@ -41,21 +84,17 @@ void main()
 }
 )glsl";
 
-    // ================================================================
-    // Basic fragment shader  (simple directional light + base colour)
-    // ================================================================
-
-    inline constexpr const char* BasicFragmentShader = R"glsl(
+    inline constexpr const char* BasicFragmentShaderFallback = R"glsl(
 #version 460 core
 
 in vec3 v_WorldPos;
 in vec3 v_Normal;
 in vec2 v_TexCoord;
 
-uniform vec4 u_BaseColor;        // RGBA base colour
-uniform vec3 u_LightDir;         // direction TO the light (normalised)
-uniform vec3 u_LightColor;       // light radiance
-uniform vec3 u_CameraPos;        // camera world position
+uniform vec4 u_BaseColor;
+uniform vec3 u_LightDir;
+uniform vec3 u_LightColor;
+uniform vec3 u_CameraPos;
 
 out vec4 FragColor;
 
@@ -66,15 +105,12 @@ void main()
     vec3 V = normalize(u_CameraPos - v_WorldPos);
     vec3 H = normalize(L + V);
 
-    // Ambient
     float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * u_LightColor;
 
-    // Diffuse (Lambert)
     float diff = max(dot(N, L), 0.0);
     vec3 diffuse = diff * u_LightColor;
 
-    // Specular (Blinn-Phong)
     float spec = pow(max(dot(N, H), 0.0), 64.0);
     vec3 specular = spec * u_LightColor;
 
@@ -83,11 +119,7 @@ void main()
 }
 )glsl";
 
-    // ================================================================
-    // Flat colour shader  (no lighting, just base colour + MVP)
-    // ================================================================
-
-    inline constexpr const char* FlatVertexShader = R"glsl(
+    inline constexpr const char* FlatVertexShaderFallback = R"glsl(
 #version 460 core
 
 layout(location = 0) in vec3 a_Position;
@@ -106,7 +138,7 @@ void main()
 }
 )glsl";
 
-    inline constexpr const char* FlatFragmentShader = R"glsl(
+    inline constexpr const char* FlatFragmentShaderFallback = R"glsl(
 #version 460 core
 
 in vec3 v_Color;
@@ -118,5 +150,29 @@ void main()
     FragColor = vec4(v_Color, 1.0);
 }
 )glsl";
+
+    // ==================================================================
+    // Public accessors — prefer file, fall back to embedded
+    // ==================================================================
+
+    inline std::string GetBasicVertexShader() {
+        auto src = LoadShaderFile("Basic.vert.glsl");
+        return src.empty() ? std::string(BasicVertexShaderFallback) : src;
+    }
+
+    inline std::string GetBasicFragmentShader() {
+        auto src = LoadShaderFile("Basic.frag.glsl");
+        return src.empty() ? std::string(BasicFragmentShaderFallback) : src;
+    }
+
+    inline std::string GetFlatVertexShader() {
+        auto src = LoadShaderFile("Flat.vert.glsl");
+        return src.empty() ? std::string(FlatVertexShaderFallback) : src;
+    }
+
+    inline std::string GetFlatFragmentShader() {
+        auto src = LoadShaderFile("Flat.frag.glsl");
+        return src.empty() ? std::string(FlatFragmentShaderFallback) : src;
+    }
 
 } // namespace Echelon::RayShaders
