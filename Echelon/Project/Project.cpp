@@ -125,4 +125,86 @@ namespace Echelon {
         fout << out.c_str();
         return true;
     }
+
+    // ------------------------------------------------------------------
+    // Scene Management
+    // ------------------------------------------------------------------
+    Ref<Scene> Project::NewScene(const std::string& name) {
+        m_CurrentScene = CreateRef<Scene>(name);
+        m_CurrentScenePath.clear(); // No path yet until SaveSceneAs is called
+        ECHELON_LOG_INFO("[Project] Created new scene: {}", name);
+        return m_CurrentScene;
+    }
+
+    Ref<Scene> Project::OpenScene(const std::filesystem::path& path) {
+        std::filesystem::path fullPath;
+
+        // If the path is relative, resolve it from the Scenes directory
+        if (path.is_relative()) {
+            fullPath = m_Config.ScenesDirectory / path;
+        } else {
+            fullPath = path;
+        }
+
+        if (!std::filesystem::exists(fullPath)) {
+            ECHELON_LOG_ERROR("[Project] Scene file not found: {}", fullPath.string());
+            return nullptr;
+        }
+
+        auto scene = CreateRef<Scene>();
+        SceneSerializer serializer(scene);
+        
+        if (!serializer.Deserialize(fullPath)) {
+            ECHELON_LOG_ERROR("[Project] Failed to deserialize scene: {}", fullPath.string());
+            return nullptr;
+        }
+
+        m_CurrentScene = scene;
+        m_CurrentScenePath = fullPath;
+        ECHELON_LOG_INFO("[Project] Opened scene: {}", fullPath.string());
+        return m_CurrentScene;
+    }
+
+    bool Project::SaveScene() {
+        if (!m_CurrentScene) {
+            ECHELON_LOG_ERROR("[Project] No active scene to save.");
+            return false;
+        }
+
+        if (m_CurrentScenePath.empty()) {
+            ECHELON_LOG_ERROR("[Project] Current scene has no path. Use SaveSceneAs() instead.");
+            return false;
+        }
+
+        SceneSerializer serializer(m_CurrentScene);
+        if (!serializer.Serialize(m_CurrentScenePath)) {
+            ECHELON_LOG_ERROR("[Project] Failed to save scene to: {}", m_CurrentScenePath.string());
+            return false;
+        }
+
+        ECHELON_LOG_INFO("[Project] Scene saved: {}", m_CurrentScenePath.string());
+        return true;
+    }
+
+    bool Project::SaveSceneAs(const std::filesystem::path& relativePath) {
+        if (!m_CurrentScene) {
+            ECHELON_LOG_ERROR("[Project] No active scene to save.");
+            return false;
+        }
+
+        std::filesystem::path fullPath = m_Config.ScenesDirectory / relativePath;
+
+        // Ensure the directory exists
+        std::filesystem::create_directories(fullPath.parent_path());
+
+        SceneSerializer serializer(m_CurrentScene);
+        if (!serializer.Serialize(fullPath)) {
+            ECHELON_LOG_ERROR("[Project] Failed to save scene to: {}", fullPath.string());
+            return false;
+        }
+
+        m_CurrentScenePath = fullPath;
+        ECHELON_LOG_INFO("[Project] Scene saved as: {}", fullPath.string());
+        return true;
+    }
 }
