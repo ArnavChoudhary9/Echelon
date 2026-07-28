@@ -15,6 +15,13 @@
                                   ::Echelon::s_CoreLogger->AddSink(::Echelon::ConsoleSink);\
                                   ::Echelon::s_CoreLogger->AddSink(::Echelon::FileSink("ECHELON.log"));
 
+    // Release the core logger deterministically before the program exits.
+    // s_CoreLogger is a global; if it were allowed to destruct during static
+    // teardown it would call spdlog::drop() after spdlog's own registry singleton
+    // is already gone (static-init-order fiasco) — an intermittent crash on exit.
+    // Resetting it here, while the registry is still alive, makes teardown safe.
+    #define SHUTDOWN_ECHELON_LOGGER() ::Echelon::s_CoreLogger.reset();
+
     #define ECHELON_LOG_TRACE(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Trace(__VA_ARGS__); } while(0)
     #define ECHELON_LOG_INFO(...)  do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Info(__VA_ARGS__); } while(0)
     #define ECHELON_LOG_DEBUG(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Debug(__VA_ARGS__); } while(0)
@@ -24,6 +31,7 @@
 
 #else
     #define INIT_ECHELON_LOGGER()
+    #define SHUTDOWN_ECHELON_LOGGER()
     #define ECHELON_LOG_TRACE(...)
     #define ECHELON_LOG_INFO(...)
     #define ECHELON_LOG_DEBUG(...)

@@ -46,16 +46,25 @@ namespace Echelon {
         project->DeriveSubPaths();
         project->EnsureDirectories();
 
-        // Create a default empty scene if the Scenes directory is empty
+        // Create a default empty scene if one does not already exist, and adopt
+        // it as the current scene so a freshly-created project is immediately
+        // usable (and SaveScene() has a valid path to write to).
         auto defaultSceneRelative = std::string("Default.ehscene");
-        auto defaultScenePath = project->m_Config.ScenesDirectory / defaultSceneRelative;
+        auto defaultScenePath     = project->m_Config.ScenesDirectory / defaultSceneRelative;
         if (!std::filesystem::exists(defaultScenePath)) {
             auto scene = CreateRef<Scene>("Default Scene");
             SceneSerializer serializer(scene);
             serializer.Serialize(defaultScenePath);
-            project->m_Config.StartScene = "Scenes/" + defaultSceneRelative;
+
+            project->m_CurrentScene     = scene;
+            project->m_CurrentScenePath = defaultScenePath;
             ECHELON_LOG_INFO("[Project] Created default scene: {}", defaultScenePath.string());
         }
+
+        // StartScene is stored relative to the Scenes directory (see OpenScene),
+        // so it must not carry a "Scenes/" prefix — that would double the segment
+        // when resolved and leave the start scene unloadable.
+        project->m_Config.StartScene = defaultSceneRelative;
 
         project->Save();
 
@@ -139,11 +148,19 @@ namespace Echelon {
     Ref<Scene> Project::OpenScene(const std::filesystem::path& path) {
         std::filesystem::path fullPath;
 
-        // If the path is relative, resolve it from the Scenes directory
-        if (path.is_relative()) {
-            fullPath = m_Config.ScenesDirectory / path;
-        } else {
+        if (path.is_absolute()) {
             fullPath = path;
+        } else {
+            // Relative paths resolve against the Scenes directory first. Fall back
+            // to the project root so legacy "Scenes/<name>" values (which would
+            // otherwise double the Scenes segment) still resolve. If neither
+            // exists, keep the canonical Scenes path for a clear error message.
+            fullPath = m_Config.ScenesDirectory / path;
+            if (!std::filesystem::exists(fullPath)) {
+                std::filesystem::path rootRelative = m_Config.RootDirectory / path;
+                if (std::filesystem::exists(rootRelative))
+                    fullPath = rootRelative;
+            }
         }
 
         if (!std::filesystem::exists(fullPath)) {
@@ -175,6 +192,11 @@ namespace Echelon {
             ECHELON_LOG_ERROR("[Project] Current scene has no path. Use SaveSceneAs() instead.");
             return false;
         }
+
+        // The scene directory may have been removed while the editor was running
+        // (e.g. the folder was deleted); recreate it so serialization succeeds.
+        std::error_code ec;
+        std::filesystem::create_directories(m_CurrentScenePath.parent_path(), ec);
 
         SceneSerializer serializer(m_CurrentScene);
         if (!serializer.Serialize(m_CurrentScenePath)) {

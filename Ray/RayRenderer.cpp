@@ -91,6 +91,13 @@ namespace Echelon {
     }
 
     void RayRenderer::Shutdown() {
+        // Idempotent: the renderer service shuts the active renderer down
+        // explicitly, and the plugin loader's Unload() calls Shutdown() again
+        // before destroying the instance. Guard so teardown (and its log) runs
+        // exactly once.
+        if (!m_Initialized)
+            return;
+
         m_FlatPipeline      = nullptr;
         m_FlatShader        = nullptr;
         m_BasicShader       = nullptr;

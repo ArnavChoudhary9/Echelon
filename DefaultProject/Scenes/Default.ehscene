@@ -1,0 +1,43 @@
+Scene: Default Scene
+Entities:
+  - IDComponent:
+      ID: 7280899769459319702
+    TagComponent:
+      Tag: Triangle
+    TransformComponent:
+      Position: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    RelationshipComponent:
+      Parent: 0
+      Children: []
+    MeshComponent:
+      MeshSource: Triangle
+      VertexCount: 3
+      IndexCount: 0
+    MaterialComponent:
+      ShaderName: Flat
+      AlbedoColor: [1, 1, 1, 1]
+      Roughness: 0.5
+      Metallic: 0
+  - IDComponent:
+      ID: 17362417465779476410
+    TagComponent:
+      Tag: Camera
+    TransformComponent:
+      Position: [0, 0, 3]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    RelationshipComponent:
+      Parent: 0
+      Children: []
+    CameraComponent:
+      Primary: true
+      FixedAspect: false
+      ProjectionType: 0
+      FOV: 60
+      NearClip: 0.1
+      FarClip: 1000
+      OrthoSize: 10
+      OrthoNear: -1
+      OrthoFar: 1

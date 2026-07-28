@@ -61,11 +61,25 @@ namespace Echelon {
     Application::~Application() {
         m_Running = false;
 
-        // Tear down while the window / GL context is still alive: detach layers
-        // (they release their GPU resources in OnDetach) before shutting the
-        // renderer down. m_Window is declared after m_LayerStack, so relying on
-        // member destruction order would run OnDetach on a dead GL context.
+        // Tear down while the window / GL context is still alive. Order mirrors
+        // setup in reverse:
+        //   1. Detach layers — they release the GPU resources created in OnAttach.
+        //   2. Release the active project and its scene. Scene mesh/material
+        //      components own GPU handles (vertex buffers, pipelines), and the
+        //      scene is co-owned by the static Project::s_ActiveProject. Without
+        //      an explicit release here the scene would be destroyed at program
+        //      exit — after the window (and its GL context) is gone — calling
+        //      glDelete* on a dead context and crashing. Dropping both owning refs
+        //      now frees those handles while the context is still current.
+        //   3. Shut the renderer down (releases its own GPU resources).
+        //
+        // m_Window is declared after m_LayerStack, so relying on member destruction
+        // order alone would run all of this on a dead GL context.
         m_LayerStack.Clear();
+
+        Project::SetActive(nullptr);
+        m_Project = nullptr;
+
         Renderer::Get().Shutdown();
     };
 
@@ -130,6 +144,7 @@ namespace Echelon {
 
     void Application::InitializeProject() {
         namespace fs = std::filesystem;
+        std::error_code ec;
 
         fs::path projectPath;
 
@@ -144,34 +159,78 @@ namespace Echelon {
         // Determine if this is an existing project or a new one
         // Look for a .ehproj file in the directory
         fs::path ehprojFile;
-        if (fs::exists(projectPath) && fs::is_directory(projectPath)) {
-            for (const auto& entry : fs::directory_iterator(projectPath)) {
+        if (fs::is_directory(projectPath, ec)) {
+            for (const auto& entry : fs::directory_iterator(projectPath, ec)) {
                 if (entry.path().extension() == ".ehproj") {
                     ehprojFile = entry.path();
                     break;
                 }
             }
-        } else if (fs::exists(projectPath) && projectPath.extension() == ".ehproj") {
+        } else if (fs::exists(projectPath, ec) && projectPath.extension() == ".ehproj") {
             // The user pointed directly at a .ehproj file
             ehprojFile = projectPath;
         }
 
+        // Try to load an existing project first.
         if (!ehprojFile.empty()) {
             m_Logger.Info("Loading project from: {}", ehprojFile.string());
             m_Project = Project::Load(ehprojFile);
-            if (m_Project) {
+            if (m_Project)
                 m_Logger.Info("Project '{}' loaded successfully.", m_Project->GetConfig().Name);
-            } else {
-                m_Logger.Error("Failed to load project from: {}", ehprojFile.string());
-            }
-        } else {
-            // Create a new project
-            std::string projectName = projectPath.filename().string();
+            else
+                m_Logger.Error("Failed to load project from: {}; recreating a default project.",
+                               ehprojFile.string());
+        }
+
+        // Recovery: if there was no project to load, or loading failed (missing /
+        // corrupt), (re)create one at the requested location.
+        if (!m_Project) {
+            fs::path projectDir = (projectPath.extension() == ".ehproj")
+                                      ? projectPath.parent_path()
+                                      : projectPath;
+
+            std::string projectName = projectDir.filename().string();
             if (projectName.empty()) projectName = "DefaultProject";
 
-            m_Logger.Info("Creating new project '{}' at: {}", projectName, projectPath.string());
-            m_Project = Project::Create(projectPath, projectName);
+            m_Logger.Info("Creating new project '{}' at: {}", projectName, projectDir.string());
+            m_Project = Project::Create(projectDir, projectName);
             m_Logger.Info("Project '{}' created.", m_Project->GetConfig().Name);
+        }
+
+        // Whether loaded or created, make sure a usable current scene exists.
+        EnsureProjectHasScene();
+    }
+
+    void Application::EnsureProjectHasScene() {
+        if (!m_Project || m_Project->GetCurrentScene())
+            return; // Nothing to do — Create() already adopts a fresh scene.
+
+        // Prefer the configured start scene.
+        const std::string& startScene = m_Project->GetConfig().StartScene;
+        if (!startScene.empty() && m_Project->OpenScene(startScene))
+            return;
+
+        // Either no start scene is configured, or the file it points to is missing
+        // or unreadable (deleted / corrupt). Recreate an empty scene so the project
+        // stays usable, keeping the configured path where possible.
+        std::string relativePath = startScene.empty() ? std::string("Default.ehscene")
+                                                       : startScene;
+
+        // SaveSceneAs resolves relative to the Scenes directory; strip a legacy
+        // "Scenes/" prefix so the recreated file lands in the right place.
+        if (relativePath.rfind("Scenes/", 0) == 0)
+            relativePath = relativePath.substr(7);
+
+        if (startScene.empty())
+            m_Logger.Info("Project has no start scene; creating a default one.");
+        else
+            m_Logger.Warn("Start scene '{}' is missing or unreadable; recreating it.",
+                          startScene);
+
+        m_Project->NewScene("Default Scene");
+        if (m_Project->SaveSceneAs(relativePath)) {
+            m_Project->GetConfig().StartScene = relativePath;
+            m_Project->Save();
         }
     }
 }

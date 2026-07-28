@@ -141,9 +141,20 @@ namespace Echelon {
         /**
          * @brief Initialize or load the project based on command-line arguments.
          *        If argv[1] points to an existing .ehproj or directory with one,
-         *        load it. Otherwise create a new project. Defaults to ./DefaultProject/.
+         *        load it. Otherwise — or if loading fails because the project is
+         *        new, missing, or corrupt — (re)create one. Defaults to
+         *        ./DefaultProject/. This recovery is engine-level so every Echelon
+         *        application benefits, not just the editor.
          */
         void InitializeProject();
+
+        /**
+         * @brief Guarantee the active project has a current scene backed by a real
+         *        file path (opening the start scene, or creating + saving a default
+         *        one). Ensures SaveScene() always has somewhere to write and that
+         *        scene-owned GPU resources are tracked by the project.
+         */
+        void EnsureProjectHasScene();
 
         static Application* s_Instance;
     };

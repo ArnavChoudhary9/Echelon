@@ -28,6 +28,11 @@ int main(int argc, char** argv) {
     ECHELON_LOG_TRACE("Deleting Application . . .");
     app.reset();
     ECHELON_PROFILE_END_SESSION(); // End shutdown profiling session
-    
+
+    // Tear the core logger down while spdlog's registry is still alive; letting
+    // the global s_CoreLogger destruct at process exit crashes intermittently
+    // (static-init-order fiasco with spdlog's registry singleton).
+    SHUTDOWN_ECHELON_LOGGER()
+
     return 0;
 }
