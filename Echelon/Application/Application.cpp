@@ -5,6 +5,7 @@
 #include "Platform/Window.hpp"
 #include "Platform/Input.hpp"
 #include "Project/Project.hpp"
+#include "Renderer/RendererService.hpp"
 
 #include <filesystem>
 
@@ -43,10 +44,29 @@ namespace Echelon {
 
         // ---- Create platform Input ----
         m_Input = Input::Create(winDesc.Backend);
+
+        // ---- Load + initialise the default renderer (engine-owned) ----
+        // Done here (after the window exists) so it is ready before any layer's
+        // OnAttach runs. The default plugin name is renderer-agnostic and comes
+        // from the application config (build-time ECHELON_DEFAULT_RENDERER).
+        if (m_Window)
+        {
+            if (Renderer::Get().Init(*m_Window, m_Config.DefaultRenderer))
+                m_Logger.Info("Renderer '{}' initialized.", Renderer::Get().GetActiveName());
+            else
+                m_Logger.Error("Failed to initialize renderer '{}'.", m_Config.DefaultRenderer);
+        }
     };
 
     Application::~Application() {
         m_Running = false;
+
+        // Tear down while the window / GL context is still alive: detach layers
+        // (they release their GPU resources in OnDetach) before shutting the
+        // renderer down. m_Window is declared after m_LayerStack, so relying on
+        // member destruction order would run OnDetach on a dead GL context.
+        m_LayerStack.Clear();
+        Renderer::Get().Shutdown();
     };
 
     void Application::Run() {

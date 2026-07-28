@@ -38,10 +38,19 @@ namespace Echelon {
 
         /**
          * @brief Pops an overlay from the stack.
-         * 
+         *
          * @param overlay The overlay to pop.
          */
         void PopOverlay(Ref<Layer> overlay);
+
+        /**
+         * @brief Detach and remove every layer/overlay from the stack.
+         *
+         * Call this while dependent resources (e.g. the window / GL context)
+         * are still alive so layers can release GPU resources in OnDetach().
+         * The stack is left empty and the destructor becomes a no-op.
+         */
+        void Clear();
 
         /**
          * @brief Handles an event for all layers in the stack.

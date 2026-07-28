@@ -7,14 +7,24 @@ A modular C++ game engine with a plugin-based renderer. The graphics backend (Ra
 ```text
 EchelonEditor  ──links──▶  Echelon (libEchelon.so / .dll / .dylib)
                                 │
-                          RendererLoader
-                                │ dlopen / LoadLibrary
+                          Renderer service (singleton)
+                                │ dlopen / LoadLibrary  (RTLD_LOCAL, per-plugin)
                                 ▼
-                       Ray (libRenderer.so / .dll / .dylib)
-                           RayRenderer (OpenGL + glad)
+                       Ray (libRay.so / Ray.dll / libRay.dylib)
+                           RayRenderer (engine GraphicsAPI → OpenGL)
 ```
 
-The engine core (`Echelon`) and the renderer (`Ray`) are both shared libraries. After building, the post-build step copies both next to the editor binary so they are found at launch without any `LD_LIBRARY_PATH` or `PATH` changes.
+The engine core (`Echelon`) owns the OpenGL backend + glad; renderer plugins link only against `Echelon`. The engine loads the default renderer at startup through a global `Renderer` singleton and exposes it to user code via `Renderer::Get()`. Additional renderers can be loaded, unloaded, and hot-swapped at runtime; only the active renderer is GL-initialized at any time. After building, the post-build step copies the engine and the selected renderer next to the editor binary so they are found at launch without any `LD_LIBRARY_PATH` or `PATH` changes.
+
+### Selecting the default renderer
+
+`Ray` is the default. To build/ship a different renderer as the default (and omit Ray from the package), put it in a top-level folder named after it (with its own `premake5.lua` whose `targetname` equals the folder name, exporting `CreateRenderer`/`DestroyRenderer`), then generate with:
+
+```bash
+Vendor/premake5 gmake2 --renderer=MyRenderer
+```
+
+The chosen name is baked in as the runtime default (`ECHELON_DEFAULT_RENDERER`) and only that library is compiled and copied. If the renderer library is missing or incompatible at runtime, the engine logs an error and falls back to the last working renderer.
 
 ## Prerequisites
 
@@ -103,11 +113,11 @@ bin/<config>-<os>-x86_64/
 ├── EchelonEditor/
 │   ├── EchelonEditor          (or .exe)
 │   ├── libEchelon.so          (or .dll / .dylib) ← copied by post-build
-│   └── libRenderer.so         (or Renderer.dll / libRenderer.dylib) ← copied by post-build
+│   └── libRay.so              (or Ray.dll / libRay.dylib) ← copied by post-build
 ├── Echelon/
 │   └── libEchelon.so
-└── Renderer/
-    └── libRenderer.so
+└── Ray/                       (or <renderer> when built with --renderer=<name>)
+    └── libRay.so
 ```
 
 The post-build copy ensures the editor can find both shared libraries without any environment variable changes.

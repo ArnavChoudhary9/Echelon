@@ -10,6 +10,14 @@
 #include "Echelon/Project/Project.hpp"
 
 #include <cstdint>
+#include <string>
+
+// Build-time default renderer plugin. The premake `--renderer=Name` option
+// bakes this define into the application; the fallback keeps the header
+// self-contained if it is unset.
+#ifndef ECHELON_DEFAULT_RENDERER
+    #define ECHELON_DEFAULT_RENDERER "Ray"
+#endif
 
 namespace Echelon {
     class ApplicationCommandLineArgs {
@@ -52,6 +60,13 @@ namespace Echelon {
 
         /** Platform window creation parameters. */
         WindowDesc WindowDescription;
+
+        /**
+         * Logical name / library base name of the renderer plugin the engine
+         * loads and activates at startup. Defaults to the build-time
+         * ECHELON_DEFAULT_RENDERER; user code may override before construction.
+         */
+        std::string DefaultRenderer = ECHELON_DEFAULT_RENDERER;
     };
 
     /**

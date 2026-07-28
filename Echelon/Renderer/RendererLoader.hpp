@@ -2,15 +2,22 @@
 
 /**
  * @file RendererLoader.hpp
- * @brief Runtime DLL loader for the renderer plugin (Renderer.dll).
+ * @brief Runtime shared-library loader for a single renderer plugin.
+ *
+ * This is the low-level, per-library RAII wrapper. The engine-facing
+ * Renderer service (RendererService.hpp) owns one RendererLoader per loaded
+ * plugin and decides which one is active.
  *
  * Best Practices:
- *  - Only one renderer is active at a time; call Load() once during startup.
- *  - The loader owns the DLL handle lifetime; Unload() releases it cleanly.
+ *  - The loader owns the library handle lifetime; Unload() releases it cleanly.
  *  - All calls to the renderer go through Get() which returns a raw
  *    non-owning pointer — the loader manages the object's lifetime.
- *  - Fatal errors (missing DLL / missing exports) are logged through the
+ *  - Fatal errors (missing library / missing exports) are logged through the
  *    engine logger and leave the renderer in a null state.
+ *  - The loader is renderer-agnostic: it never assumes a particular plugin
+ *    name. Use ResolveLibraryPath("<name>") to turn a base name into the
+ *    platform library path (lib<name>.so / <name>.dll / lib<name>.dylib)
+ *    next to the executable.
  */
 
 #include "Echelon/Core/Base.hpp"
@@ -27,7 +34,7 @@ namespace Echelon {
      * Usage:
      * @code
      *     RendererLoader loader;
-     *     if (loader.Load("Renderer.dll")) {
+     *     if (loader.Load(RendererLoader::ResolveLibraryPath("Ray"))) {
      *         auto* api = loader.Get();
      *         api->Init(hwnd, w, h);
      *     }
@@ -49,14 +56,14 @@ namespace Echelon {
         /**
          * @brief Load a renderer plugin.
          *
-         * Searches for the DLL in the executable's directory (or a supplied path),
-         * resolves CreateRenderer / DestroyRenderer, and instantiates the renderer.
+         * Loads the shared library at @p dllPath, resolves
+         * CreateRenderer / DestroyRenderer, and instantiates the renderer.
+         * Use ResolveLibraryPath("<name>") to build a path from a base name.
          *
-         * @param dllPath Path or filename of the renderer DLL
-         *                (default: "Renderer.dll" / "libRenderer.so").
+         * @param dllPath Absolute (or exe-relative) path of the renderer library.
          * @return true if the renderer was loaded successfully.
          */
-        bool Load(const std::filesystem::path& dllPath = DefaultDLLName());
+        bool Load(const std::filesystem::path& dllPath);
 
         /**
          * @brief Unload the renderer, destroying the instance and releasing the DLL.
@@ -79,15 +86,40 @@ namespace Echelon {
          */
         RendererAPI* operator->() const { return m_Renderer; }
 
-    private:
-        static std::filesystem::path DefaultDLLName();
+        /**
+         * @brief Plugin-reported metadata (valid after a successful Load()).
+         */
+        const RendererInfo& Info() const { return m_Info; }
 
+        /**
+         * @brief The resolved library path this loader loaded from.
+         */
+        const std::filesystem::path& Path() const { return m_Path; }
+
+        /**
+         * @brief Directory containing the running executable.
+         *
+         * Cross-platform: uses /proc/self/exe (Linux), _NSGetExecutablePath
+         * (macOS), and GetModuleFileName (Windows).
+         */
+        static std::filesystem::path ExecutableDir();
+
+        /**
+         * @brief Turn a renderer base name into the platform library path next
+         *        to the executable, e.g. "Ray" ->
+         *        <exe_dir>/libRay.so | Ray.dll | libRay.dylib.
+         */
+        static std::filesystem::path ResolveLibraryPath(const std::string& baseName);
+
+    private:
         using CreateRendererFn  = RendererAPI* (*)();
         using DestroyRendererFn = void (*)(RendererAPI*);
 
-        void*              m_DLLHandle      = nullptr;
-        RendererAPI*       m_Renderer       = nullptr;
-        DestroyRendererFn  m_DestroyFn      = nullptr;
+        void*                 m_DLLHandle = nullptr;
+        RendererAPI*          m_Renderer  = nullptr;
+        DestroyRendererFn     m_DestroyFn = nullptr;
+        RendererInfo          m_Info;
+        std::filesystem::path m_Path;
     };
 
 } // namespace Echelon

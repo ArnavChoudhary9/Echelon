@@ -2,7 +2,7 @@
  * @file RayExports.cpp
  * @brief DLL export entry points for the Ray renderer plugin.
  *
- * These are the only symbols exported from Renderer.dll.
+ * These are the only symbols exported from the Ray plugin library.
  * The engine's RendererLoader resolves them at runtime via
  * LoadLibrary / GetProcAddress (or dlopen / dlsym).
  */

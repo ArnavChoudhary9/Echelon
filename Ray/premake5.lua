@@ -1,20 +1,20 @@
 -- ============================================================
--- Ray Renderer  (Shared Library / DLL → Renderer.dll)
+-- Ray Renderer  (Shared Library / DLL → libRay.so / Ray.dll)
 -- ============================================================
--- This project compiles to Renderer.dll (or libRenderer.so).
--- Swap it with any DLL that exports the same CreateRenderer /
--- DestroyRenderer factory and the engine works unchanged.
+-- This project compiles to the "Ray" renderer plugin
+-- (libRay.so / Ray.dll / libRay.dylib). Any plugin that exports the same
+-- CreateRenderer / DestroyRenderer factory can replace it — build it in a
+-- folder named after itself and select it with `--renderer=<name>`.
 -- ============================================================
 
 project "Ray"
     location "."
     kind "SharedLib"
 
-    -- Output name is "Renderer" — not "Ray" — so the engine always
-    -- loads the same filename regardless of which renderer is active.
-    targetname "Renderer"
+    -- Output name matches the plugin name so the engine can load it by name.
+    targetname "Ray"
 
-    targetdir ("../bin/" .. outputdir .. "/Renderer")
+    targetdir ("../bin/" .. outputdir .. "/Ray")
     objdir ("../bin-int/" .. outputdir .. "/Ray")
 
     files
@@ -29,31 +29,24 @@ project "Ray"
         "%{wks.location}",
         "%{wks.location}/Echelon",
         "%{IncludeDir.glm}",
-        "%{IncludeDir.glad}",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.spdlog}",
         "%{IncludeDir.yaml}",
         "%{IncludeDir.entt}",
     }
 
+    -- Ray uses only the engine's GraphicsAPI abstraction — the OpenGL backend
+    -- and glad live inside libEchelon, so the plugin links ONLY the engine.
+    -- (This is why no `-Wl,--allow-multiple-definition` is needed: there is a
+    -- single glad instance shared by all modules, so no duplicate symbols.)
     links
     {
         "Echelon",
-        "glad",
     }
 
     -- Export symbols on Windows
     filter "system:windows"
         defines { "RAY_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
-        linkoptions { "-Wl,--allow-multiple-definition" }
-
-    -- GNU ld flag; not supported by Apple ld
-    filter "system:linux"
-        linkoptions { "-Wl,--allow-multiple-definition" }
-
-    -- Frameworks required by glad/GLFW on macOS
-    filter "system:macosx"
-        links { "OpenGL" }
 
     -- PIC is required for shared libraries on all non-Windows platforms
     filter "configurations:Debug"

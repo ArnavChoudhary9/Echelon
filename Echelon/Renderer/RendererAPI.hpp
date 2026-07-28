@@ -8,13 +8,14 @@
  *  - This header is the **contract** between the engine and any renderer
  *    plugin.  Renderer DLLs include this header and implement the interface.
  *  - The engine never links against a specific renderer at compile time.
- *    Instead, RendererLoader dynamically loads Renderer.dll at runtime.
+ *    Instead, the Renderer service dynamically loads the plugin library
+ *    (e.g. libRay.so / Ray.dll) at runtime.
  *  - All types exchanged across the DLL boundary are engine types
  *    (Ref, Scope, std::string, glm types) — keep the ABI stable.
  *  - Renderers may maintain internal state (pipeline caches, GPU contexts).
  *    The engine only interacts through this interface.
- *  - To swap renderers, replace Renderer.dll with another implementation
- *    that exports the same CreateRenderer factory.
+ *  - To swap renderers, provide another plugin library that exports the same
+ *    CreateRenderer factory and load it through the Renderer service.
  *
  * Plugin authors: implement every pure-virtual below and export the factory:
  * @code

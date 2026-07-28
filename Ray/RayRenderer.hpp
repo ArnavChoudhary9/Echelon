@@ -4,7 +4,8 @@
  * @file RayRenderer.hpp
  * @brief "Ray" PBR Renderer — the default Echelon renderer plugin.
  *
- * This is a concrete RendererAPI implementation compiled as Renderer.dll.
+ * This is a concrete RendererAPI implementation compiled as the "Ray" plugin
+ * (libRay.so / Ray.dll / libRay.dylib).
  * It uses the engine's GraphicsAPI abstraction layer — no backend-specific
  * code lives here.
  *

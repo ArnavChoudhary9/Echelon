@@ -11,31 +11,19 @@ public:
     virtual ~EditorOverlay() {}
 
     virtual void OnAttach() override {
-        // ---- Load and initialise the renderer plugin ----
         auto& window = Application::Get().GetWindow();
-
-        if (!m_RendererLoader.Load()) {
-            return;
-        }
-
-        auto* renderer = m_RendererLoader.Get();
-        if (!renderer->Init(window.GetNativeHandle(),
-                            window.GetWidth(),
-                            window.GetHeight())) {
-            return;
-        }
 
         // ---- Load or create a scene from the project ----
         auto project = Application::Get().GetProject();
         if (project) {
             // Try to load the current scene from the project
             m_Scene = project->GetCurrentScene();
-            
+
             // If no current scene, try to load the start scene
             if (!m_Scene && !project->GetConfig().StartScene.empty()) {
                 m_Scene = project->OpenScene(project->GetConfig().StartScene);
             }
-            
+
             // If still no scene, create a default one
             if (!m_Scene) {
                 m_Scene = project->NewScene("Editor Scene");
@@ -45,7 +33,10 @@ public:
             m_Scene = CreateRef<Scene>("Editor Scene");
         }
 
-        // ---- Setup default camera if scene is empty ----
+        // ---- Setup default camera + demo triangle if scene is empty ----
+        // Only the renderer-independent structure is created here; the GPU
+        // resources (vertex buffer, pipeline) are built in the renderer-change
+        // listener below so they load in one place and rebuild on hot-swap.
         auto registry = m_Scene->GetEntityRegistry().lock();
         bool hasCamera = false;
         if (registry) {
@@ -65,61 +56,46 @@ public:
             cam.Cam.SetViewportSize(window.GetWidth(), window.GetHeight());
             cam.Cam.SetPosition(camTransform.Position);
 
-            // ---- Triangle entity ----
+            // ---- Triangle entity (structure only; GPU data built on renderer change) ----
             Entity triangleEntity = m_Scene->AddEntity("Triangle");
 
-            // Build triangle mesh data: vec3 position + vec3 color
-            float triangleVertices[] = {
-                // positions          // colors
-                 0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top    (red)
-                -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // left   (green)
-                 0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // right  (blue)
-            };
+            auto& mesh       = triangleEntity.AddComponent<MeshComponent>();
+            mesh.VertexCount = 3;
+            mesh.MeshSource  = "Triangle";
 
-            BufferDesc vbDesc;
-            vbDesc.Size        = sizeof(triangleVertices);
-            vbDesc.Usage       = BufferUsage::VertexBuffer;
-            vbDesc.Memory      = MemoryUsage::GPUOnly;
-            vbDesc.InitialData = triangleVertices;
-            vbDesc.DebugName   = "TriangleVB";
-
-            auto vb = renderer->GetDevice()->CreateBuffer(vbDesc);
-
-            // Attach MeshComponent to the entity
-            auto& mesh        = triangleEntity.AddComponent<MeshComponent>();
-            mesh.VertexBuffer = vb;
-            mesh.VertexCount  = 3;
-            mesh.MeshSource   = "Triangle";
-            mesh.Invalidate();
-
-            // Attach MaterialComponent (uses default flat pipeline from renderer)
             auto& mat        = triangleEntity.AddComponent<MaterialComponent>();
             mat.ShaderName   = "Flat";
-            mat.PipelineRef  = renderer->GetDefaultPipeline();
             mat.AlbedoColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
-            mat.Invalidate();
         }
+
+        // ---- Register the renderer-change listener ----
+        // Fires immediately for the currently-active renderer (replay-on-subscribe)
+        // and again on every hot-swap, so all GPU resources are (re)built in one place.
+        m_RendererChangedListener = Renderer::Get().AddChangeListener(
+            [this](RendererAPI* renderer) { BuildSceneGPUResources(renderer); });
     }
 
     virtual void OnDetach() override {
+        Renderer::Get().RemoveChangeListener(m_RendererChangedListener);
+
         auto project = Application::Get().GetProject();
         if (project) {
             project->SaveScene();
         }
 
         m_Scene = nullptr;
-        m_RendererLoader.Unload();
+        // The engine owns the renderer lifetime — do not unload it here.
     }
 
     virtual void OnUpdate(float deltaTime) override {
         ECHELON_PROFILE_FUNCTION();
         (void)deltaTime;
-        
+
         // Update ECS
 
         {
             ECHELON_PROFILE_SCOPE("Rendering Loop");
-            auto* renderer = m_RendererLoader.Get();
+            auto* renderer = Renderer::Get().GetActive();
             if (!renderer) return;
 
             // Find the primary camera in the scene
@@ -163,10 +139,9 @@ public:
     virtual void OnEvent(Event& event) override {
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<WindowResizeEvent>([this](WindowResizeEvent& e) {
-            auto* renderer = m_RendererLoader.Get();
-            if (renderer) {
-                renderer->OnResize(e.GetWidth(), e.GetHeight());
-            }
+            // Forward through the service so the cached size stays in sync for
+            // any subsequent renderer swap.
+            Renderer::Get().OnResize(e.GetWidth(), e.GetHeight());
 
             // Update camera viewport
             auto registry = m_Scene->GetEntityRegistry().lock();
@@ -188,6 +163,53 @@ public:
     virtual void OnImGUIEnd() override {}
 
 private:
-    RendererLoader m_RendererLoader;
-    Ref<Scene>     m_Scene;
+    /**
+     * @brief (Re)build all GPU-backed scene resources for the given renderer.
+     *
+     * Called once at startup and again on every renderer hot-swap. GPU handles
+     * created by a previous renderer are invalid for the new one, so vertex
+     * buffers are recreated from each mesh's source and pipelines are reassigned
+     * from the active renderer's default pipeline.
+     */
+    void BuildSceneGPUResources(RendererAPI* renderer) {
+        if (!renderer || !m_Scene) return;
+
+        auto device          = renderer->GetDevice();
+        auto defaultPipeline = renderer->GetDefaultPipeline();
+        if (!device) return;
+
+        auto registry = m_Scene->GetEntityRegistry().lock();
+        if (!registry) return;
+
+        auto view = registry->view<MeshComponent, MaterialComponent>();
+        for (auto&& [entity, mesh, mat] : view.each()) {
+            // Reconstruct the vertex buffer from the mesh source tag.
+            if (mesh.MeshSource == "Triangle") {
+                // positions (vec3) + colors (vec3)
+                float triangleVertices[] = {
+                     0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top    (red)
+                    -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // left   (green)
+                     0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // right  (blue)
+                };
+
+                BufferDesc vbDesc;
+                vbDesc.Size        = sizeof(triangleVertices);
+                vbDesc.Usage       = BufferUsage::VertexBuffer;
+                vbDesc.Memory      = MemoryUsage::GPUOnly;
+                vbDesc.InitialData = triangleVertices;
+                vbDesc.DebugName   = "TriangleVB";
+
+                mesh.VertexBuffer = device->CreateBuffer(vbDesc);
+                mesh.VertexCount  = 3;
+                mesh.Invalidate();
+            }
+
+            // Reassign the pipeline from the active renderer.
+            mat.PipelineRef = defaultPipeline;
+            mat.Invalidate();
+        }
+    }
+
+    uint32_t   m_RendererChangedListener = 0;
+    Ref<Scene> m_Scene;
 };

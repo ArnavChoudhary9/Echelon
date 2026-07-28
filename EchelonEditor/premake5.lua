@@ -35,15 +35,19 @@ project "EchelonEditor"
     defines
     {
         "YAML_CPP_STATIC_DEFINE",
+        -- Bake the build-time default renderer name into the application so
+        -- ApplicationConfig::DefaultRenderer picks it up (renderer-agnostic engine).
+        ("ECHELON_DEFAULT_RENDERER=\"" .. defaultRenderer .. "\""),
     }
 
-    -- Copy engine + renderer shared libraries next to the editor executable after build
+    -- Copy the engine + the selected renderer shared library next to the editor
+    -- executable after build. Only the chosen renderer (`--renderer=<name>`) is
+    -- copied, so a custom default keeps the package free of unused plugins.
     filter "system:windows"
-        linkoptions { "-Wl,--allow-multiple-definition" }
         postbuildcommands
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}"),
-            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/Renderer.dll %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/" .. defaultRenderer .. ".dll %{cfg.buildtarget.directory}"),
             -- Copy shader files next to the executable so the renderer can find them
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.vert.glsl %{cfg.buildtarget.directory}/Shaders",
@@ -53,18 +57,17 @@ project "EchelonEditor"
         }
 
     filter "system:linux"
-        linkoptions { "-Wl,--allow-multiple-definition" }
         postbuildcommands
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.so %{cfg.buildtarget.directory}"),
-            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/libRenderer.so %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".so %{cfg.buildtarget.directory}"),
         }
 
     filter "system:macosx"
         postbuildcommands
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.dylib %{cfg.buildtarget.directory}"),
-            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/libRenderer.dylib %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".dylib %{cfg.buildtarget.directory}"),
         }
 
     filter {}

@@ -1,6 +1,8 @@
 #include "RendererLoader.hpp"
 #include "Core/Log.hpp"
 
+#include <utility>
+
 #if defined(_WIN32) || defined(_WIN64)
     #define WIN32_LEAN_AND_MEAN
     #define NOMINMAX
@@ -19,22 +21,35 @@ namespace Echelon {
     // Platform helpers
     // ------------------------------------------------------------------
 
-    std::filesystem::path RendererLoader::DefaultDLLName() {
+    std::filesystem::path RendererLoader::ExecutableDir() {
 #if defined(_WIN32) || defined(_WIN64)
-        // Windows: LoadLibraryA searches the executable's directory automatically.
-        return "Renderer.dll";
+        char buf[MAX_PATH];
+        DWORD n = ::GetModuleFileNameA(nullptr, buf, static_cast<DWORD>(sizeof(buf)));
+        if (n > 0 && n < sizeof(buf))
+            return std::filesystem::path(buf).parent_path();
+        return std::filesystem::current_path();
 #elif defined(__APPLE__)
         // _NSGetExecutablePath gives the path of the running executable.
         char buf[PATH_MAX];
         uint32_t size = sizeof(buf);
         if (_NSGetExecutablePath(buf, &size) == 0)
-            return std::filesystem::canonical(buf).parent_path() / "libRenderer.dylib";
-        return "libRenderer.dylib";
+            return std::filesystem::canonical(buf).parent_path();
+        return std::filesystem::current_path();
 #else
-        // dlopen with a bare name does not search the binary's directory.
-        // Use /proc/self/exe to build an absolute path so dlopen treats it as
-        // a path (contains '/') and skips the library search entirely.
-        return std::filesystem::canonical("/proc/self/exe").parent_path() / "libRenderer.so";
+        // /proc/self/exe is the running binary on Linux.
+        return std::filesystem::canonical("/proc/self/exe").parent_path();
+#endif
+    }
+
+    std::filesystem::path RendererLoader::ResolveLibraryPath(const std::string& baseName) {
+        // Build an absolute path so dlopen treats it as a path (contains '/')
+        // and skips the system library search entirely.
+#if defined(_WIN32) || defined(_WIN64)
+        return ExecutableDir() / (baseName + ".dll");
+#elif defined(__APPLE__)
+        return ExecutableDir() / ("lib" + baseName + ".dylib");
+#else
+        return ExecutableDir() / ("lib" + baseName + ".so");
 #endif
     }
 
@@ -74,7 +89,9 @@ namespace Echelon {
     RendererLoader::RendererLoader(RendererLoader&& other) noexcept
         : m_DLLHandle(other.m_DLLHandle),
           m_Renderer(other.m_Renderer),
-          m_DestroyFn(other.m_DestroyFn)
+          m_DestroyFn(other.m_DestroyFn),
+          m_Info(std::move(other.m_Info)),
+          m_Path(std::move(other.m_Path))
     {
         other.m_DLLHandle = nullptr;
         other.m_Renderer  = nullptr;
@@ -87,6 +104,8 @@ namespace Echelon {
             m_DLLHandle      = other.m_DLLHandle;
             m_Renderer       = other.m_Renderer;
             m_DestroyFn      = other.m_DestroyFn;
+            m_Info           = std::move(other.m_Info);
+            m_Path           = std::move(other.m_Path);
             other.m_DLLHandle = nullptr;
             other.m_Renderer  = nullptr;
             other.m_DestroyFn = nullptr;
@@ -142,9 +161,10 @@ namespace Echelon {
             return false;
         }
 
-        RendererInfo info = m_Renderer->GetInfo();
+        m_Path = dllPath;
+        m_Info = m_Renderer->GetInfo();
         ECHELON_LOG_INFO("[RendererLoader] Loaded '{}' v{} by {}",
-                         info.Name, info.Version, info.Author);
+                         m_Info.Name, m_Info.Version, m_Info.Author);
 
         return true;
     }

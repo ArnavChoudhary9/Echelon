@@ -4,10 +4,17 @@
 
 namespace Echelon {
     LayerStack::~LayerStack() {
+        // Idempotent: if Clear() already ran (e.g. from Application shutdown
+        // while the window was still alive) this is a no-op.
+        Clear();
+    }
+
+    void LayerStack::Clear() {
         for (auto& layer : m_Layers) {
             layer->OnDetach();
         }
         m_Layers.clear();
+        m_LayerInsertIndex = 0;
     }
 
     void LayerStack::PushLayer(Ref<Layer> layer) {
