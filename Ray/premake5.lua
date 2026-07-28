@@ -40,14 +40,20 @@ project "Ray"
         "glad",
     }
 
-    -- Allow multiple definitions when linking against engine DLL + system libs
-    linkoptions { "-Wl,--allow-multiple-definition" }
-
     -- Export symbols on Windows
     filter "system:windows"
         defines { "RAY_BUILD_DLL" }
+        linkoptions { "-Wl,--allow-multiple-definition" }
 
-    -- PIC needed for shared libraries on all platforms
+    -- GNU ld flag; not supported by Apple ld
+    filter "system:linux"
+        linkoptions { "-Wl,--allow-multiple-definition" }
+
+    -- Frameworks required by glad/GLFW on macOS
+    filter "system:macosx"
+        links { "OpenGL" }
+
+    -- PIC is required for shared libraries on all non-Windows platforms
     filter "configurations:Debug"
         buildoptions { "-fPIC" }
 

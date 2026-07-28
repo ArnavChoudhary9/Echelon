@@ -5,6 +5,10 @@
     #define WIN32_LEAN_AND_MEAN
     #define NOMINMAX
     #include <windows.h>
+#elif defined(__APPLE__)
+    #include <dlfcn.h>
+    #include <mach-o/dyld.h>
+    #include <climits>
 #else
     #include <dlfcn.h>
 #endif
@@ -17,11 +21,20 @@ namespace Echelon {
 
     std::filesystem::path RendererLoader::DefaultDLLName() {
 #if defined(_WIN32) || defined(_WIN64)
+        // Windows: LoadLibraryA searches the executable's directory automatically.
         return "Renderer.dll";
 #elif defined(__APPLE__)
+        // _NSGetExecutablePath gives the path of the running executable.
+        char buf[PATH_MAX];
+        uint32_t size = sizeof(buf);
+        if (_NSGetExecutablePath(buf, &size) == 0)
+            return std::filesystem::canonical(buf).parent_path() / "libRenderer.dylib";
         return "libRenderer.dylib";
 #else
-        return "libRenderer.so";
+        // dlopen with a bare name does not search the binary's directory.
+        // Use /proc/self/exe to build an absolute path so dlopen treats it as
+        // a path (contains '/') and skips the library search entirely.
+        return std::filesystem::canonical("/proc/self/exe").parent_path() / "libRenderer.so";
 #endif
     }
 

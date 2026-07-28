@@ -37,15 +37,28 @@ project "EchelonEditor"
         "YAML_CPP_STATIC_DEFINE",
     }
 
-    -- Linker: allow multiple definitions (needed when EntryPoint is shared)
-    linkoptions { "-Wl,--allow-multiple-definition" }
-
-    -- Copy engine + renderer DLLs next to the editor executable after build
+    -- Copy engine + renderer shared libraries next to the editor executable after build
     filter "system:windows"
+        linkoptions { "-Wl,--allow-multiple-definition" }
         postbuildcommands
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/Renderer.dll %{cfg.buildtarget.directory}"),
+        }
+
+    filter "system:linux"
+        linkoptions { "-Wl,--allow-multiple-definition" }
+        postbuildcommands
+        {
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.so %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/libRenderer.so %{cfg.buildtarget.directory}"),
+        }
+
+    filter "system:macosx"
+        postbuildcommands
+        {
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.dylib %{cfg.buildtarget.directory}"),
+            ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Renderer/libRenderer.dylib %{cfg.buildtarget.directory}"),
         }
 
     filter {}

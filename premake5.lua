@@ -21,6 +21,14 @@ filter "system:windows"
     systemversion "latest"
     defines { "ECHELON_PLATFORM_WINDOWS" }
 
+filter "system:linux"
+    systemversion "latest"
+    defines { "ECHELON_PLATFORM_LINUX" }
+
+filter "system:macosx"
+    systemversion "latest"
+    defines { "ECHELON_PLATFORM_MACOS" }
+
 filter "configurations:Debug"
     defines { "ECHELON_DEBUG" }
     runtime "Debug"

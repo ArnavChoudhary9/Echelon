@@ -43,10 +43,15 @@ project "Echelon"
     -- Windows system libs needed by GLFW
     filter "system:windows"
         links { "gdi32", "opengl32" }
-
-    -- Engine-specific defines
-    filter "system:windows"
         defines { "ECHELON_BUILD_DLL", "YAML_CPP_STATIC_DEFINE" }
+
+    -- Linux system libs: X11 for GLFW, dl for dlopen (RendererLoader)
+    filter "system:linux"
+        links { "dl", "X11", "Xrandr", "Xinerama", "Xcursor", "Xi" }
+
+    -- macOS frameworks: Cocoa/IOKit/CoreVideo for GLFW, OpenGL for glad
+    filter "system:macosx"
+        links { "Cocoa", "IOKit", "CoreVideo", "OpenGL" }
 
     -- Shared libs need position-independent code
     filter "configurations:Debug"

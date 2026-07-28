@@ -7,8 +7,8 @@
     #include "Echelon/Core/Base.hpp"
 
     namespace Echelon {
-        // Core Logger — static per TU; only the EntryPoint TU initialises it.
-        static Ref<Logger> s_CoreLogger;
+        // Inline variable: one shared instance across all TUs and shared libs.
+        inline Ref<Logger> s_CoreLogger;
     }
 
     #define INIT_ECHELON_LOGGER() ::Echelon::s_CoreLogger = ::Echelon::CreateRef<::Echelon::Logger>("ECHELON");\
