@@ -54,13 +54,19 @@ project "Echelon"
         links { "Cocoa", "IOKit", "CoreVideo", "OpenGL" }
 
     -- Shared libs need position-independent code
-    -- -Wa,-mbig-obj is required on MinGW for translation units with heavy
-    -- template usage (yaml-cpp + entt) that exceed the PE/COFF section limit.
     filter "configurations:Debug"
-        buildoptions { "-fPIC", "-Wa,-mbig-obj" }
+        buildoptions { "-fPIC" }
 
     filter "configurations:Release"
-        buildoptions { "-fPIC", "-Wa,-mbig-obj" }
+        buildoptions { "-fPIC" }
+
+    -- -Wa,-mbig-obj is required on MinGW for translation units with heavy
+    -- template usage (yaml-cpp + entt) that exceed the PE/COFF section limit.
+    filter { "system:windows", "configurations:Debug" }
+        buildoptions { "-Wa,-mbig-obj" }
+
+    filter { "system:windows", "configurations:Release" }
+        buildoptions { "-Wa,-mbig-obj" }
 
     filter {}
         
