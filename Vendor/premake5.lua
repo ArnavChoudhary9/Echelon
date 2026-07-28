@@ -39,6 +39,9 @@ project "yaml-cpp"
     staticruntime "off"
     warnings "off"
 
+    filter "system:linux"
+        pic "On"
+
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
     objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
 
@@ -73,25 +76,26 @@ project "yaml-cpp"
 -- glad  (Compiled static library — OpenGL loader)
 -- ============================================================
 project "glad"
-    location "glad/generated"
+    location "glad"
     kind "StaticLib"
     language "C"
     staticruntime "off"
     warnings "off"
+
+    filter "system:linux"
+        pic "On"
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
     objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
 
     files
     {
-        "glad/generated/src/gl.c",
-        "glad/generated/include/glad/gl.h",
-        "glad/generated/include/KHR/khrplatform.h",
+        "glad/src/gl.c",
     }
 
     includedirs
     {
-        "glad/generated/include",
+        "glad/include",
     }
 
     filter "configurations:Debug"
@@ -170,6 +174,8 @@ project "GLFW"
             "GLFW/src/xkb_unicode.c",
         }
         defines { "_GLFW_X11" }
+        
+        pic "On"
 
     filter "system:macosx"
         files
