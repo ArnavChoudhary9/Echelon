@@ -38,6 +38,21 @@ namespace Echelon {
             entity.GetComponent<RelationshipComponent>().Serialize(out);
         }
 
+        // MeshComponent
+        if (entity.HasComponent<MeshComponent>()) {
+            entity.GetComponent<MeshComponent>().Serialize(out);
+        }
+
+        // CameraComponent
+        if (entity.HasComponent<CameraComponent>()) {
+            entity.GetComponent<CameraComponent>().Serialize(out);
+        }
+
+        // MaterialComponent
+        if (entity.HasComponent<MaterialComponent>()) {
+            entity.GetComponent<MaterialComponent>().Serialize(out);
+        }
+
         out << YAML::EndMap; // Entity
     }
 
@@ -50,7 +65,7 @@ namespace Echelon {
         auto registry = m_Scene->GetEntityRegistry().lock();
         if (registry) {
             auto view = registry->view<IDComponent>();
-            for (auto entityID : view) {
+            for (auto&& [entityID, id] : view.each()) {
                 Entity entity(entityID, m_Scene);
                 if (!entity)
                     continue;
@@ -131,6 +146,25 @@ namespace Echelon {
                     entity.AddComponent<RelationshipComponent>(rc.Parent);
                     entity.GetComponent<RelationshipComponent>().Children = rc.Children;
                 }
+            }
+
+            // MeshComponent (reconstructs metadata only — GPU buffers
+            // must be re-created by the application / renderer)
+            if (entityNode["MeshComponent"]) {
+                auto mc = MeshComponent::Deserialize(entityNode["MeshComponent"]);
+                entity.AddComponent<MeshComponent>(mc);
+            }
+
+            // CameraComponent
+            if (entityNode["CameraComponent"]) {
+                auto cc = CameraComponent::Deserialize(entityNode["CameraComponent"]);
+                entity.AddComponent<CameraComponent>(cc);
+            }
+
+            // MaterialComponent (pipeline ref is transient — reassigned by renderer)
+            if (entityNode["MaterialComponent"]) {
+                auto mc = MaterialComponent::Deserialize(entityNode["MaterialComponent"]);
+                entity.AddComponent<MaterialComponent>(mc);
             }
         }
 

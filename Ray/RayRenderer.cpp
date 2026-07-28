@@ -109,7 +109,7 @@ namespace Echelon {
     // ------------------------------------------------------------------
 
     static Ref<Shader> CompileGLSL(const Ref<Device>& device,
-                                    const char* vertSrc, const char* fragSrc,
+                                    const std::string& vertSrc, const std::string& fragSrc,
                                     const std::string& name)
     {
         ShaderDesc desc;
@@ -118,15 +118,15 @@ namespace Echelon {
         ShaderStageDesc vertStage;
         vertStage.Stage  = ShaderStage::Vertex;
         vertStage.Format = ShaderSourceFormat::GLSL;
-        vertStage.Source.assign(reinterpret_cast<const uint8_t*>(vertSrc),
-                                reinterpret_cast<const uint8_t*>(vertSrc) + std::strlen(vertSrc));
+        vertStage.Source.assign(reinterpret_cast<const uint8_t*>(vertSrc.data()),
+                                reinterpret_cast<const uint8_t*>(vertSrc.data()) + vertSrc.size());
         desc.Stages.push_back(vertStage);
 
         ShaderStageDesc fragStage;
         fragStage.Stage  = ShaderStage::Fragment;
         fragStage.Format = ShaderSourceFormat::GLSL;
-        fragStage.Source.assign(reinterpret_cast<const uint8_t*>(fragSrc),
-                                reinterpret_cast<const uint8_t*>(fragSrc) + std::strlen(fragSrc));
+        fragStage.Source.assign(reinterpret_cast<const uint8_t*>(fragSrc.data()),
+                                reinterpret_cast<const uint8_t*>(fragSrc.data()) + fragSrc.size());
         desc.Stages.push_back(fragStage);
 
         return device->CreateShader(desc);
@@ -134,16 +134,16 @@ namespace Echelon {
 
     void RayRenderer::CreateDefaultResources()
     {
-        // Compile the basic PBR shader
+        // Compile the basic PBR shader (file-based with fallback)
         m_BasicShader = CompileGLSL(m_Device,
-                                     RayShaders::BasicVertexShader,
-                                     RayShaders::BasicFragmentShader,
+                                     RayShaders::GetBasicVertexShader(),
+                                     RayShaders::GetBasicFragmentShader(),
                                      "Ray_BasicShader");
 
-        // Compile the flat colour shader
+        // Compile the flat colour shader (file-based with fallback)
         m_FlatShader = CompileGLSL(m_Device,
-                                    RayShaders::FlatVertexShader,
-                                    RayShaders::FlatFragmentShader,
+                                    RayShaders::GetFlatVertexShader(),
+                                    RayShaders::GetFlatFragmentShader(),
                                     "Ray_FlatShader");
 
         // Create a pipeline for the flat shader (position + color)
@@ -231,6 +231,42 @@ namespace Echelon {
 
     void RayRenderer::EndScene() {
         // Post-processing passes — placeholder
+    }
+
+    // ------------------------------------------------------------------
+    // Scene-driven rendering via RenderGraph
+    // ------------------------------------------------------------------
+
+    void RayRenderer::RenderScene(const Ref<Scene>& scene) {
+        if (!scene) return;
+
+        // Update the render graph — early-outs if nothing changed
+        m_RenderGraph.Update(scene, m_FlatPipeline);
+
+        // Issue draw calls from pipeline-sorted groups.
+        // Each PipelineGroup shares a pipeline — bind once, draw all batches.
+        for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
+            const auto& pipeline = group.PipelineRef ? group.PipelineRef : m_FlatPipeline;
+
+            for (const auto& batch : group.Batches) {
+                for (size_t i = 0; i < batch.Transforms.size(); ++i) {
+                    const auto& transform = batch.Transforms[i];
+
+                    if (batch.IndexBuffer && batch.IndexCount > 0) {
+                        DrawIndexed(batch.VertexBuffer,
+                                    batch.IndexBuffer,
+                                    pipeline,
+                                    transform,
+                                    batch.IndexCount);
+                    } else {
+                        Draw(batch.VertexBuffer,
+                             pipeline,
+                             transform,
+                             batch.VertexCount);
+                    }
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------

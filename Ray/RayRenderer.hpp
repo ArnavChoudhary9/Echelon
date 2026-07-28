@@ -16,6 +16,7 @@
  */
 
 #include "Echelon/Renderer/RendererAPI.hpp"
+#include "Echelon/Renderer/RenderGraph.hpp"
 #include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
 #include "Echelon/GraphicsAPI/Device.hpp"
 
@@ -39,6 +40,9 @@ namespace Echelon {
         // ---- Scene scope ----
         void BeginScene(const Ref<Scene>& scene) override;
         void EndScene() override;
+
+        // ---- Scene-driven rendering ----
+        void RenderScene(const Ref<Scene>& scene) override;
 
         // ---- Draw commands ----
         void DrawIndexed(const Ref<Buffer>& vertexBuffer,
@@ -91,6 +95,9 @@ namespace Echelon {
         Ref<Shader>   m_BasicShader;
         Ref<Shader>   m_FlatShader;
         Ref<Pipeline> m_FlatPipeline;
+
+        // ---- Render graph (caches draw commands across frames) ----
+        RenderGraph   m_RenderGraph;
     };
 
 } // namespace Echelon

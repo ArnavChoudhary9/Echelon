@@ -138,9 +138,9 @@ namespace Echelon {
 
         if (!ehprojFile.empty()) {
             m_Logger.Info("Loading project from: {}", ehprojFile.string());
-            auto project = Project::Load(ehprojFile);
-            if (project) {
-                m_Logger.Info("Project '{}' loaded successfully.", project->GetConfig().Name);
+            m_Project = Project::Load(ehprojFile);
+            if (m_Project) {
+                m_Logger.Info("Project '{}' loaded successfully.", m_Project->GetConfig().Name);
             } else {
                 m_Logger.Error("Failed to load project from: {}", ehprojFile.string());
             }
@@ -150,8 +150,8 @@ namespace Echelon {
             if (projectName.empty()) projectName = "DefaultProject";
 
             m_Logger.Info("Creating new project '{}' at: {}", projectName, projectPath.string());
-            auto project = Project::Create(projectPath, projectName);
-            m_Logger.Info("Project '{}' created.", project->GetConfig().Name);
+            m_Project = Project::Create(projectPath, projectName);
+            m_Logger.Info("Project '{}' created.", m_Project->GetConfig().Name);
         }
     }
 }

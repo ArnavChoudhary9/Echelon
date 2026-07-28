@@ -7,6 +7,7 @@
 #include "Core/Clock.hpp"
 
 #include "Application/Application.hpp"
+#include "Instrumentation/Instrumentation.hpp"
 
 // --- Logger ---
 #include "Logger/Logger.hpp"

@@ -22,6 +22,7 @@
 #include <filesystem>
 
 namespace Echelon {
+    class Scene;
 
     /**
      * @brief Holds all paths and metadata for an Echelon project.
@@ -103,6 +104,57 @@ namespace Echelon {
          */
         std::filesystem::path GetProjectFilePath() const;
 
+        // ---- Scene Management ----
+
+        /**
+         * @brief Create a new scene with the given name.
+         *        The scene is set as the current scene but not saved to disk until SaveScene() is called.
+         * 
+         * @param name The name for the new scene.
+         * @return Ref<Scene> The newly created scene.
+         */
+        Ref<Scene> NewScene(const std::string& name = "Untitled Scene");
+
+        /**
+         * @brief Open an existing scene from a relative or absolute path.
+         *        If the path is relative, it's resolved from the project's Scenes directory.
+         *        The loaded scene becomes the current scene.
+         * 
+         * @param path Path to the scene file (relative to Scenes/ or absolute).
+         * @return Ref<Scene> The loaded scene, or nullptr on failure.
+         */
+        Ref<Scene> OpenScene(const std::filesystem::path& path);
+
+        /**
+         * @brief Save the current scene to its current path.
+         *        If the scene hasn't been saved before, this will fail.
+         *        Use SaveSceneAs() for new scenes.
+         * 
+         * @return true on success, false on failure.
+         */
+        bool SaveScene();
+
+        /**
+         * @brief Save the current scene to a new path (relative to Scenes directory).
+         *        Updates the current scene path.
+         * 
+         * @param relativePath Path relative to the Scenes directory (e.g., "MyScene.ehscene").
+         * @return true on success, false on failure.
+         */
+        bool SaveSceneAs(const std::filesystem::path& relativePath);
+
+        /**
+         * @brief Get the currently active scene.
+         * @return Ref<Scene> The current scene, or nullptr if none is active.
+         */
+        Ref<Scene> GetCurrentScene() const { return m_CurrentScene; }
+
+        /**
+         * @brief Get the path to the current scene file.
+         * @return const std::filesystem::path& The current scene's file path.
+         */
+        const std::filesystem::path& GetCurrentScenePath() const { return m_CurrentScenePath; }
+
     private:
         /**
          * @brief Ensure all sub-directories (Scenes, Resources, Builds) exist on disk.
@@ -115,6 +167,8 @@ namespace Echelon {
         void DeriveSubPaths();
 
         ProjectConfig m_Config;
+        Ref<Scene> m_CurrentScene;
+        std::filesystem::path m_CurrentScenePath;
 
         static Ref<Project> s_ActiveProject;
     };

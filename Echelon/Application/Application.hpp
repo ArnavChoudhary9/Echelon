@@ -99,6 +99,13 @@ namespace Echelon {
         Window& GetWindow() { return *m_Window; }
         const Window& GetWindow() const { return *m_Window; }
 
+        /**
+         * @brief Get the current project.
+         * 
+         * @return Ref<Project> Shared pointer to the current project (may be null if loading/creation failed).
+         */
+        Ref<Project> GetProject() const { return m_Project; }
+
         // Event Handlers
         bool OnWindowClose(WindowCloseEvent&) { m_Running = false; return true; };
 
@@ -112,6 +119,8 @@ namespace Echelon {
         Scope<Window> m_Window;
         Scope<Input>  m_Input;
         float m_FrameDuration = 1/60.0f; // Default to 60 FPS frame time, to avoid division by zero on the first frame.
+
+        Ref<Project> m_Project;
 
     private:
         /**
