@@ -24,25 +24,14 @@ project "Ray"
         "**.cpp",
     }
 
-    includedirs
-    {
-        "%{wks.location}",
-        "%{wks.location}/Echelon",
-        "%{IncludeDir.glm}",
-        "%{IncludeDir.GLFW}",
-        "%{IncludeDir.spdlog}",
-        "%{IncludeDir.yaml}",
-        "%{IncludeDir.entt}",
-    }
+    includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
+    UseDeps("glm", "GLFW", "spdlog", "yaml", "entt", "uuid")
 
     -- Ray uses only the engine's GraphicsAPI abstraction — the OpenGL backend
     -- and glad live inside libEchelon, so the plugin links ONLY the engine.
     -- (This is why no `-Wl,--allow-multiple-definition` is needed: there is a
     -- single glad instance shared by all modules, so no duplicate symbols.)
-    links
-    {
-        "Echelon",
-    }
+    links { "Echelon" }
 
     -- Export symbols on Windows
     filter "system:windows"

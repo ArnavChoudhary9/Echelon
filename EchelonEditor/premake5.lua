@@ -17,20 +17,10 @@ project "EchelonEditor"
         "../Echelon/Application/EntryPoint.cpp",
     }
 
-    includedirs
-    {
-        "%{wks.location}",
-        "%{wks.location}/Echelon",
-        "%{IncludeDir.spdlog}",
-        "%{IncludeDir.glm}",
-        "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml}",
-    }
+    includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
+    UseDeps("spdlog", "glm", "entt", "yaml", "uuid")
 
-    links
-    {
-        "Echelon",
-    }
+    links { "Echelon" }
 
     defines
     {
@@ -69,6 +59,12 @@ project "EchelonEditor"
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.so %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".so %{cfg.buildtarget.directory}"),
+            -- Copy shader files next to the executable so the renderer can find them
+            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.frag.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.frag.glsl %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
         }
@@ -78,6 +74,12 @@ project "EchelonEditor"
         {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.dylib %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".dylib %{cfg.buildtarget.directory}"),
+            -- Copy shader files next to the executable so the renderer can find them
+            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.frag.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.vert.glsl %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.frag.glsl %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
         }

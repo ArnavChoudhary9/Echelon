@@ -28,6 +28,11 @@ header_only_project("entt", "entt", {
     "entt/single_include/entt/**.hpp",
 })
 
+header_only_project("uuid", "uuid", {
+    "uuid/include/**.h",
+    "uuid/include/**.hpp",
+})
+
 -- ============================================================
 -- yaml-cpp  (Compiled static library)
 -- ============================================================

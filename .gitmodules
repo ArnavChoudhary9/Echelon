@@ -13,3 +13,6 @@
 [submodule "Vendor/yaml"]
 	path = Vendor/yaml
 	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "Vendor/uuid"]
+	path = Vendor/uuid
+	url = https://github.com/mariusbancila/stduuid.git

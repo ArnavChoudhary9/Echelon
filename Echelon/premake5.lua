@@ -21,24 +21,9 @@ project "Echelon"
         "Application/EntryPoint.cpp",
     }
 
-    includedirs
-    {
-        ".",
-        "%{wks.location}",
-        "%{IncludeDir.spdlog}",
-        "%{IncludeDir.glm}",
-        "%{IncludeDir.entt}",
-        "%{IncludeDir.GLFW}",
-        "%{IncludeDir.glad}",
-        "%{IncludeDir.yaml}",
-    }
-
-    links
-    {
-        "GLFW",
-        "glad",
-        "yaml-cpp",
-    }
+    includedirs { ".", "%{wks.location}" }
+    UseDeps("spdlog", "glm", "entt", "GLFW", "glad", "yaml", "uuid")
+    LinkDeps("GLFW", "glad", "yaml")
 
     -- Windows system libs needed by GLFW
     filter "system:windows"
