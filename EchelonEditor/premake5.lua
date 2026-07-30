@@ -18,7 +18,7 @@ project "EchelonEditor"
     }
 
     includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
-    UseDeps("spdlog", "glm", "entt", "yaml", "uuid")
+    UseDeps("spdlog", "glm", "entt", "yaml", "uuid", "tinyobjloader")
 
     links { "Echelon" }
 

@@ -16,3 +16,6 @@
 [submodule "Vendor/uuid"]
 	path = Vendor/uuid
 	url = https://github.com/mariusbancila/stduuid.git
+[submodule "Vendor/tinyobjloader"]
+	path = Vendor/tinyobjloader
+	url = https://github.com/tinyobjloader/tinyobjloader.git

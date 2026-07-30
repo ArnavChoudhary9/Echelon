@@ -9,7 +9,7 @@
  * 
  * Best Practices:
  *  - A single Project instance is held by the Application; access via Project::Get().
- *  - All filesystem paths are stored as std::filesystem::path for portability.
+ *  - All filesystem paths are stored as fs::path for portability.
  *  - Project files use the .ehproj extension and are serialized with YAML.
  *  - Sub-directories are lazily created on first save / explicit Init().
  *  - The project path can be supplied via command-line args; if missing,
@@ -29,11 +29,12 @@ namespace Echelon {
      */
     struct ProjectConfig {
         std::string Name        = "Untitled";
-        std::filesystem::path RootDirectory;          // The project working directory
-        std::filesystem::path ScenesDirectory;        // <Root>/Scenes/
-        std::filesystem::path ResourcesDirectory;     // <Root>/Resources/
-        std::filesystem::path BuildsDirectory;        // <Root>/Builds/
-        std::string StartScene  = "";                 // Relative path to the start scene
+        fs::path RootDirectory;                        // The project working directory
+        fs::path ScenesDirectory;                     // <Root>/Scenes/
+        fs::path AssetsDirectory;                      // <Root>/Assets/
+        fs::path ResourcesDirectory;                  // <Root>/Resources/
+        fs::path BuildsDirectory;                      // <Root>/Builds/
+        fs::path StartScene;                           // Relative path to the start scene
     };
 
     /**
@@ -73,7 +74,7 @@ namespace Echelon {
          * @param name       Human-readable project name.
          * @return Ref<Project> The newly created project.
          */
-        static Ref<Project> Create(const std::filesystem::path& projectDir, const std::string& name = "Untitled");
+        static Ref<Project> Create(const fs::path& projectDir, const std::string& name = "Untitled");
 
         /**
          * @brief Load an existing project from a .ehproj file.
@@ -81,7 +82,7 @@ namespace Echelon {
          * @param projectFilePath Full path to the .ehproj file.
          * @return Ref<Project> The loaded project, or nullptr on failure.
          */
-        static Ref<Project> Load(const std::filesystem::path& projectFilePath);
+        static Ref<Project> Load(const fs::path& projectFilePath);
 
         /**
          * @brief Save the current project state to its .ehproj file.
@@ -94,15 +95,16 @@ namespace Echelon {
         const ProjectConfig& GetConfig() const { return m_Config; }
         ProjectConfig& GetConfig() { return m_Config; }
 
-        const std::filesystem::path& GetRootDirectory()      const { return m_Config.RootDirectory; }
-        const std::filesystem::path& GetScenesDirectory()    const { return m_Config.ScenesDirectory; }
-        const std::filesystem::path& GetResourcesDirectory() const { return m_Config.ResourcesDirectory; }
-        const std::filesystem::path& GetBuildsDirectory()    const { return m_Config.BuildsDirectory; }
+        const fs::path& GetRootDirectory()      const { return m_Config.RootDirectory; }
+        const fs::path& GetScenesDirectory()    const { return m_Config.ScenesDirectory; }
+        const fs::path& GetAssetsDirectory()    const { return m_Config.AssetsDirectory; }
+        const fs::path& GetResourcesDirectory() const { return m_Config.ResourcesDirectory; }
+        const fs::path& GetBuildsDirectory()    const { return m_Config.BuildsDirectory; }
 
         /**
          * @brief Get the full path to the .ehproj file.
          */
-        std::filesystem::path GetProjectFilePath() const;
+        fs::path GetProjectFilePath() const;
 
         // ---- Scene Management ----
 
@@ -123,7 +125,7 @@ namespace Echelon {
          * @param path Path to the scene file (relative to Scenes/ or absolute).
          * @return Ref<Scene> The loaded scene, or nullptr on failure.
          */
-        Ref<Scene> OpenScene(const std::filesystem::path& path);
+        Ref<Scene> OpenScene(const fs::path& path);
 
         /**
          * @brief Save the current scene to its current path.
@@ -141,7 +143,7 @@ namespace Echelon {
          * @param relativePath Path relative to the Scenes directory (e.g., "MyScene.ehscene").
          * @return true on success, false on failure.
          */
-        bool SaveSceneAs(const std::filesystem::path& relativePath);
+        bool SaveSceneAs(const fs::path& relativePath);
 
         /**
          * @brief Get the currently active scene.
@@ -151,9 +153,9 @@ namespace Echelon {
 
         /**
          * @brief Get the path to the current scene file.
-         * @return const std::filesystem::path& The current scene's file path.
+         * @return const fs::path& The current scene's file path.
          */
-        const std::filesystem::path& GetCurrentScenePath() const { return m_CurrentScenePath; }
+        const fs::path& GetCurrentScenePath() const { return m_CurrentScenePath; }
 
     private:
         /**
@@ -168,7 +170,7 @@ namespace Echelon {
 
         ProjectConfig m_Config;
         Ref<Scene> m_CurrentScene;
-        std::filesystem::path m_CurrentScenePath;
+        fs::path m_CurrentScenePath;
 
         static Ref<Project> s_ActiveProject;
     };

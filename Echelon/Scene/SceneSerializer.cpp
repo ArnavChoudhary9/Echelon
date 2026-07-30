@@ -56,7 +56,7 @@ namespace Echelon {
         out << YAML::EndMap; // Entity
     }
 
-    bool SceneSerializer::Serialize(const std::filesystem::path& filepath) const {
+    bool SceneSerializer::Serialize(const fs::path& filepath) const {
         YAML::Emitter out;
         out << YAML::BeginMap;
         out << YAML::Key << "Scene"    << YAML::Value << m_Scene->GetName();
@@ -89,8 +89,8 @@ namespace Echelon {
     // ------------------------------------------------------------------
     // Deserialize
     // ------------------------------------------------------------------
-    bool SceneSerializer::Deserialize(const std::filesystem::path& filepath) {
-        if (!std::filesystem::exists(filepath)) {
+    bool SceneSerializer::Deserialize(const fs::path& filepath) {
+        if (!fs::exists(filepath)) {
             ECHELON_LOG_ERROR("[SceneSerializer] File not found: {}", filepath.string());
             return false;
         }

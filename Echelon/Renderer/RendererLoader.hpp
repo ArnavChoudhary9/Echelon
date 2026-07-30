@@ -63,7 +63,7 @@ namespace Echelon {
          * @param dllPath Absolute (or exe-relative) path of the renderer library.
          * @return true if the renderer was loaded successfully.
          */
-        bool Load(const std::filesystem::path& dllPath);
+        bool Load(const fs::path& dllPath);
 
         /**
          * @brief Unload the renderer, destroying the instance and releasing the DLL.
@@ -94,7 +94,7 @@ namespace Echelon {
         /**
          * @brief The resolved library path this loader loaded from.
          */
-        const std::filesystem::path& Path() const { return m_Path; }
+        const fs::path& Path() const { return m_Path; }
 
         /**
          * @brief Directory containing the running executable.
@@ -102,14 +102,14 @@ namespace Echelon {
          * Cross-platform: uses /proc/self/exe (Linux), _NSGetExecutablePath
          * (macOS), and GetModuleFileName (Windows).
          */
-        static std::filesystem::path ExecutableDir();
+        static fs::path ExecutableDir();
 
         /**
          * @brief Turn a renderer base name into the platform library path next
          *        to the executable, e.g. "Ray" ->
          *        <exe_dir>/libRay.so | Ray.dll | libRay.dylib.
          */
-        static std::filesystem::path ResolveLibraryPath(const std::string& baseName);
+        static fs::path ResolveLibraryPath(const std::string& baseName);
 
     private:
         using CreateRendererFn  = RendererAPI* (*)();
@@ -119,7 +119,7 @@ namespace Echelon {
         RendererAPI*          m_Renderer  = nullptr;
         DestroyRendererFn     m_DestroyFn = nullptr;
         RendererInfo          m_Info;
-        std::filesystem::path m_Path;
+        fs::path m_Path;
     };
 
 } // namespace Echelon

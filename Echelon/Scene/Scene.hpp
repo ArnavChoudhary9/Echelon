@@ -17,16 +17,21 @@
 
 #include "Core/Base.hpp"
 #include "Core/UUID.hpp"
+#include "Asset/Asset.hpp"
 #include "ECS/Entity.hpp"
 #include "Scene/SceneGraph.hpp"
 
 #include <string>
 
 namespace Echelon {
-    class Scene {
+    class Scene : public Asset {
     public:
         Scene(const std::string& name = "Untitled Scene");
-        ~Scene();
+        ~Scene() override;
+
+        // ---- Asset interface ----
+        AssetType GetType() const override { return AssetType::Scene; }
+        bool IsValid() const override { return true; }
 
         // ---- Entity management ----
 

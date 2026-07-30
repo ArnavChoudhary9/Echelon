@@ -85,7 +85,7 @@ namespace Echelon {
          * @return true if the library loaded and the instance was created.
          */
         bool LoadRenderer(const std::string& name,
-                          const std::filesystem::path& path = {});
+                          const fs::path& path = {});
 
         /**
          * @brief Destroy an instance and dlclose its library.

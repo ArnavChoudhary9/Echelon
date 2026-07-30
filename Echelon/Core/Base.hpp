@@ -2,8 +2,18 @@
 
 #include <cstdint>
 #include <memory>
+#include <filesystem>
 
 namespace Echelon {
+    /**
+     * @brief Engine-wide shorthand for the standard filesystem namespace.
+     *
+     * Use `fs::path` (and `fs::exists`, `fs::create_directories`, ...) throughout
+     * the engine instead of the verbose `std::filesystem::` spelling. All
+     * filesystem paths should be represented as `fs::path` rather than strings.
+     */
+    namespace fs = std::filesystem;
+
     /**
      * @brief Creates a bitmask with a 1 at the specified position.
      * 

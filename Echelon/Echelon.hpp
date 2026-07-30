@@ -33,6 +33,9 @@
 #include "Scene/SceneGraph.hpp"
 #include "Project/Project.hpp"
 
+// --- Assets ---
+#include "Asset/AssetIncludes.hpp"
+
 // --- Renderer Plugin ---
 #include "Renderer/Renderer.hpp"
 

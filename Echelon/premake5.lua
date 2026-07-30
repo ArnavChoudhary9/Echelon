@@ -22,7 +22,7 @@ project "Echelon"
     }
 
     includedirs { ".", "%{wks.location}" }
-    UseDeps("spdlog", "glm", "entt", "GLFW", "glad", "yaml", "uuid")
+    UseDeps("spdlog", "glm", "entt", "GLFW", "glad", "yaml", "uuid", "tinyobjloader")
     LinkDeps("GLFW", "glad", "yaml")
 
     -- Windows system libs needed by GLFW

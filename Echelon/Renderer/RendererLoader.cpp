@@ -21,27 +21,27 @@ namespace Echelon {
     // Platform helpers
     // ------------------------------------------------------------------
 
-    std::filesystem::path RendererLoader::ExecutableDir() {
+    fs::path RendererLoader::ExecutableDir() {
 #if defined(_WIN32) || defined(_WIN64)
         char buf[MAX_PATH];
         DWORD n = ::GetModuleFileNameA(nullptr, buf, static_cast<DWORD>(sizeof(buf)));
         if (n > 0 && n < sizeof(buf))
-            return std::filesystem::path(buf).parent_path();
-        return std::filesystem::current_path();
+            return fs::path(buf).parent_path();
+        return fs::current_path();
 #elif defined(__APPLE__)
         // _NSGetExecutablePath gives the path of the running executable.
         char buf[PATH_MAX];
         uint32_t size = sizeof(buf);
         if (_NSGetExecutablePath(buf, &size) == 0)
-            return std::filesystem::canonical(buf).parent_path();
-        return std::filesystem::current_path();
+            return fs::canonical(buf).parent_path();
+        return fs::current_path();
 #else
         // /proc/self/exe is the running binary on Linux.
-        return std::filesystem::canonical("/proc/self/exe").parent_path();
+        return fs::canonical("/proc/self/exe").parent_path();
 #endif
     }
 
-    std::filesystem::path RendererLoader::ResolveLibraryPath(const std::string& baseName) {
+    fs::path RendererLoader::ResolveLibraryPath(const std::string& baseName) {
         // Build an absolute path so dlopen treats it as a path (contains '/')
         // and skips the system library search entirely.
 #if defined(_WIN32) || defined(_WIN64)
@@ -53,7 +53,7 @@ namespace Echelon {
 #endif
     }
 
-    static void* PlatformLoadLibrary(const std::filesystem::path& path) {
+    static void* PlatformLoadLibrary(const fs::path& path) {
 #if defined(_WIN32) || defined(_WIN64)
         return static_cast<void*>(::LoadLibraryA(path.string().c_str()));
 #else
@@ -117,7 +117,7 @@ namespace Echelon {
     // Load
     // ------------------------------------------------------------------
 
-    bool RendererLoader::Load(const std::filesystem::path& dllPath) {
+    bool RendererLoader::Load(const fs::path& dllPath) {
         // Unload any previously loaded renderer
         if (m_DLLHandle) {
             Unload();

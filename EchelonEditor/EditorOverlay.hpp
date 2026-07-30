@@ -33,10 +33,11 @@ public:
             m_Scene = CreateRef<Scene>("Editor Scene");
         }
 
-        // ---- Setup default camera + demo triangle if scene is empty ----
-        // Only the renderer-independent structure is created here; the GPU
-        // resources (vertex buffer, pipeline) are built in the renderer-change
-        // listener below so they load in one place and rebuild on hot-swap.
+        // ---- Populate a demo scene if it is empty ----
+        // Only renderer-independent structure is created here: entities reference
+        // meshes by source (a built-in name or an asset path). The AssetManager
+        // resolves them to GPU-ready meshes on demand and rebuilds those buffers
+        // automatically on renderer hot-swap — the editor owns no GPU resources.
         auto registry = m_Scene->GetEntityRegistry().lock();
         bool hasCamera = false;
         if (registry) {
@@ -48,7 +49,7 @@ public:
             // ---- Camera entity ----
             Entity cameraEntity = m_Scene->AddEntity("Camera");
             auto& camTransform = cameraEntity.GetComponent<TransformComponent>();
-            camTransform.Position = { 0.0f, 0.0f, 3.0f };
+            camTransform.Position = { 0.0f, 0.0f, 5.0f };
 
             auto& cam = cameraEntity.AddComponent<CameraComponent>();
             cam.Primary = true;
@@ -56,42 +57,60 @@ public:
             cam.Cam.SetViewportSize(window.GetWidth(), window.GetHeight());
             cam.Cam.SetPosition(camTransform.Position);
 
-            // ---- Triangle entity (structure only; GPU data built on renderer change) ----
-            Entity triangleEntity = m_Scene->AddEntity("Triangle");
+            // ---- Procedural built-in cube (from the internal shape repository) ----
+            {
+                Entity cube = m_Scene->AddEntity("Cube");
+                cube.GetComponent<TransformComponent>().Position = { -1.2f, 0.0f, 0.0f };
 
-            auto& mesh       = triangleEntity.AddComponent<MeshComponent>();
-            mesh.VertexCount = 3;
-            mesh.MeshSource  = "Triangle";
+                auto& mesh = cube.AddComponent<MeshComponent>();
+                mesh.MeshSource = "Cube"; // resolved to the built-in primitive
 
-            auto& mat        = triangleEntity.AddComponent<MaterialComponent>();
-            mat.ShaderName   = "Flat";
-            mat.AlbedoColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+                auto& mat = cube.AddComponent<MaterialComponent>();
+                mat.ShaderName  = "Flat";
+                mat.AlbedoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+            }
+
+            // ---- OBJ-loaded monkey (exercises the .obj importer + registry) ----
+            {
+                Entity obj = m_Scene->AddEntity("Monkey");
+                auto& t = obj.GetComponent<TransformComponent>();
+                t.Position = { 1.2f, 0.0f, 0.0f };
+                t.Scale    = { 0.7f, 0.7f, 0.7f };
+
+                auto& mesh = obj.AddComponent<MeshComponent>();
+                mesh.MeshSource = "Meshs/Monkey.obj"; // resolved via the OBJ importer
+
+                auto& mat = obj.AddComponent<MaterialComponent>();
+                mat.ShaderName  = "Flat";
+                mat.AlbedoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+            }
         }
-
-        // ---- Register the renderer-change listener ----
-        // Fires immediately for the currently-active renderer (replay-on-subscribe)
-        // and again on every hot-swap, so all GPU resources are (re)built in one place.
-        m_RendererChangedListener = Renderer::Get().AddChangeListener(
-            [this](RendererAPI* renderer) { BuildSceneGPUResources(renderer); });
     }
 
     virtual void OnDetach() override {
-        Renderer::Get().RemoveChangeListener(m_RendererChangedListener);
-
         auto project = Application::Get().GetProject();
         if (project) {
             project->SaveScene();
         }
 
         m_Scene = nullptr;
-        // The engine owns the renderer lifetime — do not unload it here.
+        // The engine owns the renderer + asset lifetimes — do not release them here.
     }
 
     virtual void OnUpdate(float deltaTime) override {
         ECHELON_PROFILE_FUNCTION();
-        (void)deltaTime;
 
-        // Update ECS
+        // Rotate all mesh entities for the demo
+        {
+            auto registry = m_Scene->GetEntityRegistry().lock();
+            if (registry) {
+                auto meshView = registry->view<MeshComponent, TransformComponent>();
+                for (auto&& [entity, mesh, tc] : meshView.each()) {
+                    tc.Rotation.y += 45.0f * deltaTime;
+                    tc.Rotation.x += 20.0f * deltaTime;
+                }
+            }
+        }
 
         {
             ECHELON_PROFILE_SCOPE("Rendering Loop");
@@ -163,53 +182,5 @@ public:
     virtual void OnImGUIEnd() override {}
 
 private:
-    /**
-     * @brief (Re)build all GPU-backed scene resources for the given renderer.
-     *
-     * Called once at startup and again on every renderer hot-swap. GPU handles
-     * created by a previous renderer are invalid for the new one, so vertex
-     * buffers are recreated from each mesh's source and pipelines are reassigned
-     * from the active renderer's default pipeline.
-     */
-    void BuildSceneGPUResources(RendererAPI* renderer) {
-        if (!renderer || !m_Scene) return;
-
-        auto device          = renderer->GetDevice();
-        auto defaultPipeline = renderer->GetDefaultPipeline();
-        if (!device) return;
-
-        auto registry = m_Scene->GetEntityRegistry().lock();
-        if (!registry) return;
-
-        auto view = registry->view<MeshComponent, MaterialComponent>();
-        for (auto&& [entity, mesh, mat] : view.each()) {
-            // Reconstruct the vertex buffer from the mesh source tag.
-            if (mesh.MeshSource == "Triangle") {
-                // positions (vec3) + colors (vec3)
-                float triangleVertices[] = {
-                     0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top    (red)
-                    -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // left   (green)
-                     0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // right  (blue)
-                };
-
-                BufferDesc vbDesc;
-                vbDesc.Size        = sizeof(triangleVertices);
-                vbDesc.Usage       = BufferUsage::VertexBuffer;
-                vbDesc.Memory      = MemoryUsage::GPUOnly;
-                vbDesc.InitialData = triangleVertices;
-                vbDesc.DebugName   = "TriangleVB";
-
-                mesh.VertexBuffer = device->CreateBuffer(vbDesc);
-                mesh.VertexCount  = 3;
-                mesh.Invalidate();
-            }
-
-            // Reassign the pipeline from the active renderer.
-            mat.PipelineRef = defaultPipeline;
-            mat.Invalidate();
-        }
-    }
-
-    uint32_t   m_RendererChangedListener = 0;
     Ref<Scene> m_Scene;
 };

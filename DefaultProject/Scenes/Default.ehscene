@@ -3,18 +3,34 @@ Entities:
   - IDComponent:
       ID: e05e1d3d-9ba6-4ef9-845b-bd9ea1a488cb
     TagComponent:
-      Tag: Triangle
+      Tag: Cube
     TransformComponent:
-      Position: [0, 0, 0]
+      Position: [-1.2, 0, 0]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     RelationshipComponent:
       Parent: ~
       Children: []
     MeshComponent:
-      MeshSource: Triangle
-      VertexCount: 3
-      IndexCount: 0
+      MeshSource: Cube
+    MaterialComponent:
+      ShaderName: Flat
+      AlbedoColor: [1, 1, 1, 1]
+      Roughness: 0.5
+      Metallic: 0
+  - IDComponent:
+      ID: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+    TagComponent:
+      Tag: Monkey
+    TransformComponent:
+      Position: [1.2, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [0.7, 0.7, 0.7]
+    RelationshipComponent:
+      Parent: ~
+      Children: []
+    MeshComponent:
+      MeshSource: Meshs/Monkey.obj
     MaterialComponent:
       ShaderName: Flat
       AlbedoColor: [1, 1, 1, 1]
@@ -25,7 +41,7 @@ Entities:
     TagComponent:
       Tag: Camera
     TransformComponent:
-      Position: [0, 0, 3]
+      Position: [0, 0, 5]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     RelationshipComponent:

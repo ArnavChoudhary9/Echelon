@@ -3,6 +3,8 @@
 #include "Scene/Scene.hpp"
 #include "ECS/Components.hpp"
 #include "GraphicsAPI/Pipeline.hpp"
+#include "Asset/AssetManager.hpp"
+#include "Asset/Mesh/Mesh.hpp"
 #include "Core/Log.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -29,6 +31,10 @@ namespace Echelon {
     uint64_t RenderGraph::ComputeSceneVersion(const Ref<Scene>& scene) const {
         uint64_t version = 0;
 
+        // Fold in the asset epoch so a renderer hot-swap or asset hot-reload
+        // (which rebuilds GPU buffers) forces exactly one graph rebuild.
+        version = HashCombine(version, AssetManager::Get().GetEpoch());
+
         auto registry = scene->GetEntityRegistry().lock();
         if (!registry) return version;
 
@@ -39,13 +45,13 @@ namespace Echelon {
             version = HashCombine(version, mc.Version);
 
             // Include transform in version (bit-cast floats)
-            uint32_t px, py, pz;
-            std::memcpy(&px, &tc.Position.x, 4);
-            std::memcpy(&py, &tc.Position.y, 4);
-            std::memcpy(&pz, &tc.Position.z, 4);
-            version = HashCombine(version, px);
-            version = HashCombine(version, py);
-            version = HashCombine(version, pz);
+            uint32_t px, py, pz, rx, ry, rz, sx, sy, sz;
+            std::memcpy(&px, &tc.Position.x, 4); std::memcpy(&py, &tc.Position.y, 4); std::memcpy(&pz, &tc.Position.z, 4);
+            std::memcpy(&rx, &tc.Rotation.x, 4); std::memcpy(&ry, &tc.Rotation.y, 4); std::memcpy(&rz, &tc.Rotation.z, 4);
+            std::memcpy(&sx, &tc.Scale.x,    4); std::memcpy(&sy, &tc.Scale.y,    4); std::memcpy(&sz, &tc.Scale.z,    4);
+            version = HashCombine(version, px); version = HashCombine(version, py); version = HashCombine(version, pz);
+            version = HashCombine(version, rx); version = HashCombine(version, ry); version = HashCombine(version, rz);
+            version = HashCombine(version, sx); version = HashCombine(version, sy); version = HashCombine(version, sz);
 
             // Include material version if present
             if (registry->all_of<MaterialComponent>(entity)) {
@@ -105,14 +111,45 @@ namespace Echelon {
         // Iterate all entities with both a MeshComponent and TransformComponent
         auto view = registry->view<IDComponent, MeshComponent, TransformComponent>();
         for (auto&& [entity, id, mc, tc] : view.each()) {
+            // Lazily resolve the asset handle to a GPU-ready mesh (the renderer is
+            // active during rendering, so GPU upload succeeds here).
+            if (!mc.RuntimeMesh) {
+                auto& assets = AssetManager::Get();
+                const uint64_t epoch = assets.GetEpoch();
+
+                // Attempt resolution at most once per epoch so a failed lookup does
+                // not re-log every frame, while a hot-reload / renderer swap (which
+                // bumps the epoch) still triggers a fresh attempt.
+                if (mc.ResolveEpoch != epoch) {
+                    mc.ResolveEpoch = epoch;
+
+                    UUID      handle = mc.MeshHandle;
+                    Ref<Mesh> mesh   = handle.IsNull() ? nullptr : assets.GetMesh(handle);
+
+                    // Self-heal: a persisted handle the registry no longer knows
+                    // (its .meta was removed, or the asset was renamed) falls back
+                    // to the readable source and adopts the corrected handle.
+                    if (!mesh && !mc.MeshSource.empty()) {
+                        handle = assets.GetHandle(mc.MeshSource);
+                        if (!handle.IsNull())
+                            mesh = assets.GetMesh(handle);
+                    }
+
+                    if (mesh) {
+                        mc.MeshHandle  = handle;
+                        mc.RuntimeMesh = mesh;
+                    }
+                }
+            }
+
             if (!mc.IsValid()) continue; // Skip meshes with no GPU data
 
             DrawCommand cmd;
             cmd.EntityUUID   = id.ID;
-            cmd.VertexBuffer = mc.VertexBuffer;
-            cmd.IndexBuffer  = mc.IndexBuffer;
-            cmd.VertexCount  = mc.VertexCount;
-            cmd.IndexCount   = mc.IndexCount;
+            cmd.VertexBuffer = mc.RuntimeMesh->GetVertexBuffer();
+            cmd.IndexBuffer  = mc.RuntimeMesh->GetIndexBuffer();
+            cmd.VertexCount  = mc.RuntimeMesh->GetVertexCount();
+            cmd.IndexCount   = mc.RuntimeMesh->GetIndexCount();
             cmd.Transform    = ComposeTransform(tc);
 
             // Material data

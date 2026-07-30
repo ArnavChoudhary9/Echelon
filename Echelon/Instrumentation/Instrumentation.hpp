@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Echelon/Core/Base.hpp"
 #include "Echelon/Core/Log.hpp"
 #include <chrono>
 #include <string>
@@ -39,7 +40,7 @@ namespace Echelon {
 		Instrumentor(const Instrumentor&) = delete;
 		Instrumentor(Instrumentor&&) = delete;
 
-        void BeginSession(const std::string& name, const std::string& filepath = "results.json") {
+        void BeginSession(const std::string& name, const fs::path& filepath = "results.json") {
             std::lock_guard lock(m_Mutex);
             if (m_CurrentSession) {
                 // If there is already a current session, then close it before beginning new one.
@@ -55,7 +56,7 @@ namespace Echelon {
                 m_CurrentSession = new InstrumentationSession{ name };
                 WriteHeader();
             } else {
-                ECHELON_LOG_ERROR("Instrumentor could not open results file '{0}'.", filepath);
+                ECHELON_LOG_ERROR("Instrumentor could not open results file '{0}'.", filepath.string());
             }
         }
 

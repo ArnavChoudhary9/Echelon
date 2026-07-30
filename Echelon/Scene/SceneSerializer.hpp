@@ -34,7 +34,7 @@ namespace Echelon {
          * @param filepath Full path to the output file.
          * @return true on success.
          */
-        bool Serialize(const std::filesystem::path& filepath) const;
+        bool Serialize(const fs::path& filepath) const;
 
         /**
          * @brief Deserialize a .ehscene YAML file into the bound scene.
@@ -42,7 +42,7 @@ namespace Echelon {
          * @param filepath Full path to the input file.
          * @return true on success.
          */
-        bool Deserialize(const std::filesystem::path& filepath);
+        bool Deserialize(const fs::path& filepath);
 
     private:
         void SerializeEntity(Entity entity, YAML::Emitter& out) const;

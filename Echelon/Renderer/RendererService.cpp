@@ -85,14 +85,14 @@ namespace Echelon {
     // Loading / unloading
     // ------------------------------------------------------------------
 
-    bool Renderer::LoadRenderer(const std::string& name, const std::filesystem::path& path) {
+    bool Renderer::LoadRenderer(const std::string& name, const fs::path& path) {
         if (IsLoaded(name)) {
             ECHELON_LOG_WARN("[Renderer] Renderer '{}' is already loaded; ignoring.", name);
             return true;
         }
 
         // Resolve the library path.
-        std::filesystem::path resolved;
+        fs::path resolved;
         if (path.empty())
             resolved = RendererLoader::ResolveLibraryPath(name);
         else if (path.is_relative())

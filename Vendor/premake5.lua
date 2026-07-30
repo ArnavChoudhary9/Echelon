@@ -33,6 +33,12 @@ header_only_project("uuid", "uuid", {
     "uuid/include/**.hpp",
 })
 
+header_only_project("tinyobjloader", "tinyobjloader", {
+    "tinyobjloader/**.h",
+    "tinyobjloader/**.hpp",
+    "tinyobjloader/**.cc",
+})
+
 -- ============================================================
 -- yaml-cpp  (Compiled static library)
 -- ============================================================

@@ -3,6 +3,7 @@
 #include "Core/Log.hpp"
 #include "Scene/Scene.hpp"
 #include "Scene/SceneSerializer.hpp"
+#include "Asset/AssetManager.hpp"
 
 #include "yaml-cpp/yaml.h"
 
@@ -20,29 +21,31 @@ namespace Echelon {
     // ------------------------------------------------------------------
     void Project::DeriveSubPaths() {
         m_Config.ScenesDirectory    = m_Config.RootDirectory / "Scenes";
+        m_Config.AssetsDirectory    = m_Config.RootDirectory / "Assets";
         m_Config.ResourcesDirectory = m_Config.RootDirectory / "Resources";
         m_Config.BuildsDirectory    = m_Config.RootDirectory / "Builds";
     }
 
     void Project::EnsureDirectories() const {
-        std::filesystem::create_directories(m_Config.RootDirectory);
-        std::filesystem::create_directories(m_Config.ScenesDirectory);
-        std::filesystem::create_directories(m_Config.ResourcesDirectory);
-        std::filesystem::create_directories(m_Config.BuildsDirectory);
+        fs::create_directories(m_Config.RootDirectory);
+        fs::create_directories(m_Config.ScenesDirectory);
+        fs::create_directories(m_Config.AssetsDirectory);
+        fs::create_directories(m_Config.ResourcesDirectory);
+        fs::create_directories(m_Config.BuildsDirectory);
     }
 
-    std::filesystem::path Project::GetProjectFilePath() const {
+    fs::path Project::GetProjectFilePath() const {
         return m_Config.RootDirectory / (m_Config.Name + ".ehproj");
     }
 
     // ------------------------------------------------------------------
     // Create
     // ------------------------------------------------------------------
-    Ref<Project> Project::Create(const std::filesystem::path& projectDir, const std::string& name) {
+    Ref<Project> Project::Create(const fs::path& projectDir, const std::string& name) {
         auto project = CreateRef<Project>();
 
         project->m_Config.Name          = name;
-        project->m_Config.RootDirectory = std::filesystem::absolute(projectDir);
+        project->m_Config.RootDirectory = fs::absolute(projectDir);
         project->DeriveSubPaths();
         project->EnsureDirectories();
 
@@ -51,7 +54,7 @@ namespace Echelon {
         // usable (and SaveScene() has a valid path to write to).
         auto defaultSceneRelative = std::string("Default.ehscene");
         auto defaultScenePath     = project->m_Config.ScenesDirectory / defaultSceneRelative;
-        if (!std::filesystem::exists(defaultScenePath)) {
+        if (!fs::exists(defaultScenePath)) {
             auto scene = CreateRef<Scene>("Default Scene");
             SceneSerializer serializer(scene);
             serializer.Serialize(defaultScenePath);
@@ -69,14 +72,18 @@ namespace Echelon {
         project->Save();
 
         s_ActiveProject = project;
+
+        // Seed the asset registry from any .meta sidecars so handles referenced
+        // by scenes resolve without a prior path-based import.
+        AssetManager::Get().RefreshRegistry(project->m_Config.AssetsDirectory);
         return project;
     }
 
     // ------------------------------------------------------------------
     // Load
     // ------------------------------------------------------------------
-    Ref<Project> Project::Load(const std::filesystem::path& projectFilePath) {
-        if (!std::filesystem::exists(projectFilePath)) {
+    Ref<Project> Project::Load(const fs::path& projectFilePath) {
+        if (!fs::exists(projectFilePath)) {
             ECHELON_LOG_ERROR("[Project] File not found: {}", projectFilePath.string());
             return nullptr;
         }
@@ -108,6 +115,10 @@ namespace Echelon {
         project->EnsureDirectories();
 
         s_ActiveProject = project;
+
+        // Seed the asset registry from any .meta sidecars so handles referenced
+        // by scenes resolve without a prior path-based import.
+        AssetManager::Get().RefreshRegistry(project->m_Config.AssetsDirectory);
         return project;
     }
 
@@ -120,7 +131,7 @@ namespace Echelon {
         out << YAML::Key << "Project" << YAML::Value << YAML::BeginMap;
 
         out << YAML::Key << "Name"       << YAML::Value << m_Config.Name;
-        out << YAML::Key << "StartScene" << YAML::Value << m_Config.StartScene;
+        out << YAML::Key << "StartScene" << YAML::Value << m_Config.StartScene.string();
 
         out << YAML::EndMap; // Project
         out << YAML::EndMap; // root
@@ -145,8 +156,8 @@ namespace Echelon {
         return m_CurrentScene;
     }
 
-    Ref<Scene> Project::OpenScene(const std::filesystem::path& path) {
-        std::filesystem::path fullPath;
+    Ref<Scene> Project::OpenScene(const fs::path& path) {
+        fs::path fullPath;
 
         if (path.is_absolute()) {
             fullPath = path;
@@ -156,23 +167,28 @@ namespace Echelon {
             // otherwise double the Scenes segment) still resolve. If neither
             // exists, keep the canonical Scenes path for a clear error message.
             fullPath = m_Config.ScenesDirectory / path;
-            if (!std::filesystem::exists(fullPath)) {
-                std::filesystem::path rootRelative = m_Config.RootDirectory / path;
-                if (std::filesystem::exists(rootRelative))
+            if (!fs::exists(fullPath)) {
+                fs::path rootRelative = m_Config.RootDirectory / path;
+                if (fs::exists(rootRelative))
                     fullPath = rootRelative;
             }
         }
 
-        if (!std::filesystem::exists(fullPath)) {
+        if (!fs::exists(fullPath)) {
             ECHELON_LOG_ERROR("[Project] Scene file not found: {}", fullPath.string());
             return nullptr;
         }
 
-        auto scene = CreateRef<Scene>();
-        SceneSerializer serializer(scene);
-        
-        if (!serializer.Deserialize(fullPath)) {
-            ECHELON_LOG_ERROR("[Project] Failed to deserialize scene: {}", fullPath.string());
+        // Load through the unified asset pipeline (SceneImporter handles .ehscene).
+        // Pass an absolute path so GetHandle does not re-resolve it against the
+        // project's Assets directory. forceReload always reads the current file.
+        std::error_code ec;
+        fs::path absPath = fs::absolute(fullPath, ec);
+        if (ec) absPath = fullPath;
+        UUID handle = AssetManager::Get().GetHandle(absPath.string());
+        auto scene  = AssetManager::Get().GetAssetAs<Scene>(handle, /*forceReload*/ true);
+        if (!scene) {
+            ECHELON_LOG_ERROR("[Project] Failed to load scene: {}", fullPath.string());
             return nullptr;
         }
 
@@ -196,7 +212,7 @@ namespace Echelon {
         // The scene directory may have been removed while the editor was running
         // (e.g. the folder was deleted); recreate it so serialization succeeds.
         std::error_code ec;
-        std::filesystem::create_directories(m_CurrentScenePath.parent_path(), ec);
+        fs::create_directories(m_CurrentScenePath.parent_path(), ec);
 
         SceneSerializer serializer(m_CurrentScene);
         if (!serializer.Serialize(m_CurrentScenePath)) {
@@ -208,16 +224,16 @@ namespace Echelon {
         return true;
     }
 
-    bool Project::SaveSceneAs(const std::filesystem::path& relativePath) {
+    bool Project::SaveSceneAs(const fs::path& relativePath) {
         if (!m_CurrentScene) {
             ECHELON_LOG_ERROR("[Project] No active scene to save.");
             return false;
         }
 
-        std::filesystem::path fullPath = m_Config.ScenesDirectory / relativePath;
+        fs::path fullPath = m_Config.ScenesDirectory / relativePath;
 
         // Ensure the directory exists
-        std::filesystem::create_directories(fullPath.parent_path());
+        fs::create_directories(fullPath.parent_path());
 
         SceneSerializer serializer(m_CurrentScene);
         if (!serializer.Serialize(fullPath)) {

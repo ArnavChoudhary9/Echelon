@@ -17,6 +17,7 @@
 #include "Core/UUID.hpp"
 #include "GraphicsAPI/Buffer.hpp"
 #include "Renderer/Camera.hpp"
+#include "Asset/Mesh/Mesh.hpp"
 
 #include "glm/glm.hpp"
 #include "yaml-cpp/yaml.h"
@@ -26,8 +27,8 @@
 #include <vector>
 #include <cstdint>
 
-// ---- YAML helpers for glm::vec3 ----
 namespace YAML {
+    // ---- YAML helpers for glm::vec3 ----
     template<>
     struct convert<glm::vec3> {
         static Node encode(const glm::vec3& v) {
@@ -49,33 +50,13 @@ namespace YAML {
         }
     };
 
-    // ---- YAML helpers for UUID ----
-    template<>
-    struct convert<Echelon::UUID> {
-        static Node encode(const Echelon::UUID& uuid) {
-            return Node(uuid.ToString());
-        }
-
-        static bool decode(const Node& node, Echelon::UUID& uuid) {
-            if (!node.IsScalar())
-                return false;
-            uuid = Echelon::UUID(node.as<std::string>());
-            return true;
-        }
-    };
-}
-
-// ---- YAML emitter operator for glm::vec3 ----
-namespace YAML {
     inline Emitter& operator<<(Emitter& out, const glm::vec3& v) {
         out << Flow;
         out << BeginSeq << v.x << v.y << v.z << EndSeq;
         return out;
     }
-}
 
-// ---- YAML helpers for glm::vec4 ----
-namespace YAML {
+    // ---- YAML helpers for glm::vec4 ----
     template<>
     struct convert<glm::vec4> {
         static Node encode(const glm::vec4& v) {
@@ -98,15 +79,27 @@ namespace YAML {
             return true;
         }
     };
-}
 
-// ---- YAML emitter operator for glm::vec4 ----
-namespace YAML {
     inline Emitter& operator<<(Emitter& out, const glm::vec4& v) {
         out << Flow;
         out << BeginSeq << v.x << v.y << v.z << v.w << EndSeq;
         return out;
     }
+
+    // ---- YAML helpers for UUID ----
+    template<>
+    struct convert<Echelon::UUID> {
+        static Node encode(const Echelon::UUID& uuid) {
+            return Node(uuid.ToString());
+        }
+
+        static bool decode(const Node& node, Echelon::UUID& uuid) {
+            if (!node.IsScalar())
+                return false;
+            uuid = Echelon::UUID(node.as<std::string>());
+            return true;
+        }
+    };
 }
 
 namespace Echelon {
@@ -307,13 +300,19 @@ namespace Echelon {
      */
     class MeshComponent {
     public:
-        Ref<Buffer>  VertexBuffer  = nullptr;   ///< GPU vertex buffer
-        Ref<Buffer>  IndexBuffer   = nullptr;   ///< GPU index buffer (optional)
-        uint32_t     VertexCount   = 0;         ///< Number of vertices
-        uint32_t     IndexCount    = 0;         ///< Number of indices (0 = non-indexed)
-        std::string  MeshSource    = "";        ///< Tag for serialization / reconstruction
+        UUID        MeshHandle  = UUID::Null(); ///< Authoritative asset reference (serialized).
+        std::string MeshSource  = "";           ///< Readable hint: built-in name or relative path (serialized).
+        Ref<Mesh>   RuntimeMesh = nullptr;       ///< Resolved runtime asset (transient; set by the AssetManager).
 
-        /** Bumped whenever VB/IB or counts change.  Cheap dirty check. */
+        /**
+         * Transient: the AssetManager epoch at the last resolution attempt.
+         * Guards against re-resolving (and re-logging) an unresolved reference
+         * every frame, while still retrying after a hot-reload / renderer swap
+         * (both bump the epoch).  UINT64_MAX means "never attempted".
+         */
+        uint64_t     ResolveEpoch  = UINT64_MAX;
+
+        /** Bumped whenever the resolved mesh changes.  Cheap dirty check. */
         uint64_t     Version       = 0;
 
         MeshComponent() = default;
@@ -321,26 +320,28 @@ namespace Echelon {
         MeshComponent& operator=(const MeshComponent&) = default;
         ~MeshComponent() = default;
 
-        /** Convenience: is the mesh ready to render? */
-        bool IsValid() const { return VertexBuffer != nullptr && VertexCount > 0; }
+        /** Convenience: is the mesh resolved and ready to render? */
+        bool IsValid() const { return RuntimeMesh && RuntimeMesh->IsValid(); }
 
-        /** Bump the version — call after modifying VB/IB/counts. */
+        /** Bump the version — call after the resolved mesh changes. */
         void Invalidate() { ++Version; }
 
-        // ---- Serialization (only the source tag — GPU data is transient) ----
+        // ---- Serialization (asset reference only — GPU data is transient) ----
         void Serialize(YAML::Emitter& out) const {
             out << YAML::Key << "MeshComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "MeshSource"  << YAML::Value << MeshSource;
-            out << YAML::Key << "VertexCount" << YAML::Value << VertexCount;
-            out << YAML::Key << "IndexCount"  << YAML::Value << IndexCount;
+            out << YAML::Key << "MeshHandle" << YAML::Value << MeshHandle.ToString();
+            out << YAML::Key << "MeshSource" << YAML::Value << MeshSource;
             out << YAML::EndMap;
         }
 
         static MeshComponent Deserialize(const YAML::Node& node) {
             MeshComponent mc;
-            mc.MeshSource  = node["MeshSource"].as<std::string>("");
-            mc.VertexCount = node["VertexCount"].as<uint32_t>(0);
-            mc.IndexCount  = node["IndexCount"].as<uint32_t>(0);
+            // Prefer the stable handle; fall back to the source hint (legacy scenes).
+            // Resolution to a Ref<Mesh> is deferred to render time (needs the
+            // AssetManager + active renderer), so no AssetManager dependency here.
+            std::string handleStr = node["MeshHandle"] ? node["MeshHandle"].as<std::string>("") : "";
+            mc.MeshHandle = handleStr.empty() ? UUID::Null() : UUID(handleStr);
+            mc.MeshSource = node["MeshSource"].as<std::string>("");
             return mc;
         }
     };

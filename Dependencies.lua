@@ -8,13 +8,14 @@
 --      Call LinkDeps("name") in any project that needs to link the compiled lib
 
 Dep = {}
-Dep["spdlog"]  = { include = "%{wks.location}/Vendor/spdlog/include" }
-Dep["glm"]     = { include = "%{wks.location}/Vendor/glm" }
-Dep["entt"]    = { include = "%{wks.location}/Vendor/entt/single_include" }
-Dep["GLFW"]    = { include = "%{wks.location}/Vendor/GLFW/include",  link = "GLFW" }
-Dep["glad"]    = { include = "%{wks.location}/Vendor/glad/include",  link = "glad" }
-Dep["yaml"]    = { include = "%{wks.location}/Vendor/yaml/include",  link = "yaml-cpp" }
-Dep["uuid"]    = { include = "%{wks.location}/Vendor/uuid/include" }
+Dep["spdlog"]        = { include = "%{wks.location}/Vendor/spdlog/include" }
+Dep["glm"]           = { include = "%{wks.location}/Vendor/glm" }
+Dep["entt"]          = { include = "%{wks.location}/Vendor/entt/single_include" }
+Dep["GLFW"]          = { include = "%{wks.location}/Vendor/GLFW/include",  link = "GLFW" }
+Dep["glad"]          = { include = "%{wks.location}/Vendor/glad/include",  link = "glad" }
+Dep["yaml"]          = { include = "%{wks.location}/Vendor/yaml/include",  link = "yaml-cpp" }
+Dep["uuid"]          = { include = "%{wks.location}/Vendor/uuid/include" }
+Dep["tinyobjloader"] = { include = "%{wks.location}/Vendor/tinyobjloader" }
 
 -- IncludeDir kept for use in filter-scoped token expressions like %{IncludeDir.spdlog}
 IncludeDir = {}

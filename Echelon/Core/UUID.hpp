@@ -16,6 +16,9 @@ namespace Echelon {
 
         static UUID FromName(const std::string&);
 
+        /** @brief The nil UUID (all zeros) — used as an "unset / no asset" sentinel. */
+        static UUID Null();
+
         UUID& operator=(const UUID& other) = default;
 
         ~UUID() = default;
@@ -24,6 +27,7 @@ namespace Echelon {
         [[nodiscard]] std::string ToString() const { return uuids::to_string(m_UUID); }
         [[nodiscard]] operator std::string() const { return ToString(); }
         [[nodiscard]] size_t Hash() const { return std::hash<uuids::uuid>{}(m_UUID); }
+        [[nodiscard]] bool IsNull() const { return m_UUID.is_nil(); }
 
         bool operator==(const UUID& other) const { return m_UUID == other.m_UUID; }
         bool operator!=(const UUID& other) const { return m_UUID != other.m_UUID; }

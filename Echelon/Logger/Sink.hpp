@@ -60,9 +60,9 @@ namespace Echelon {
      * @param filename 
      * @return const Ref<Sink> 
      */
-    inline const Ref<Sink> FileSink(const std::string& filename) {
+    inline const Ref<Sink> FileSink(const fs::path& filename) {
         return std::make_shared<Sink>(
-            std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true)
+            std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename.string(), true)
         );
     }
 }

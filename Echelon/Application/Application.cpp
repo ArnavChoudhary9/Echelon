@@ -6,6 +6,7 @@
 #include "Platform/Input.hpp"
 #include "Project/Project.hpp"
 #include "Renderer/RendererService.hpp"
+#include "Asset/AssetManager.hpp"
 
 #include <filesystem>
 
@@ -25,6 +26,12 @@ namespace Echelon {
             m_Config.WindowDimensions.Width,
             m_Config.WindowDimensions.Height
         );
+
+        // ---- Initialize the asset system ----
+        // Before the project so scene loading can route through the asset pipeline
+        // (SceneImporter), and before the renderer so the asset manager's
+        // renderer-change listener is registered ahead of the first fire.
+        AssetManager::Get().Init();
 
         // ---- Initialize Project ----
         InitializeProject();
@@ -80,6 +87,10 @@ namespace Echelon {
         Project::SetActive(nullptr);
         m_Project = nullptr;
 
+        // Release cached assets (and their GPU handles) while the GL context is
+        // still alive — mirrors the scene/renderer teardown ordering above.
+        AssetManager::Get().Shutdown();
+
         Renderer::Get().Shutdown();
     };
 
@@ -94,6 +105,9 @@ namespace Echelon {
             // --- Poll platform events ---
             if (m_Window)
                 m_Window->PollEvents();
+
+            // --- Hot-reload changed assets ---
+            AssetManager::Get().Update();
 
             // --- Update layers ---
             for (auto& layer : m_LayerStack) {
@@ -143,7 +157,6 @@ namespace Echelon {
     }
 
     void Application::InitializeProject() {
-        namespace fs = std::filesystem;
         std::error_code ec;
 
         fs::path projectPath;
@@ -206,26 +219,26 @@ namespace Echelon {
             return; // Nothing to do — Create() already adopts a fresh scene.
 
         // Prefer the configured start scene.
-        const std::string& startScene = m_Project->GetConfig().StartScene;
+        const fs::path& startScene = m_Project->GetConfig().StartScene;
         if (!startScene.empty() && m_Project->OpenScene(startScene))
             return;
 
         // Either no start scene is configured, or the file it points to is missing
         // or unreadable (deleted / corrupt). Recreate an empty scene so the project
         // stays usable, keeping the configured path where possible.
-        std::string relativePath = startScene.empty() ? std::string("Default.ehscene")
-                                                       : startScene;
+        fs::path relativePath = startScene.empty() ? fs::path("Default.ehscene")
+                                                   : startScene;
 
         // SaveSceneAs resolves relative to the Scenes directory; strip a legacy
         // "Scenes/" prefix so the recreated file lands in the right place.
-        if (relativePath.rfind("Scenes/", 0) == 0)
-            relativePath = relativePath.substr(7);
+        if (!relativePath.empty() && *relativePath.begin() == "Scenes")
+            relativePath = relativePath.lexically_relative("Scenes");
 
         if (startScene.empty())
             m_Logger.Info("Project has no start scene; creating a default one.");
         else
             m_Logger.Warn("Start scene '{}' is missing or unreadable; recreating it.",
-                          startScene);
+                          startScene.string());
 
         m_Project->NewScene("Default Scene");
         if (m_Project->SaveSceneAs(relativePath)) {

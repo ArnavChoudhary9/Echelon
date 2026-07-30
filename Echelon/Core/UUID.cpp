@@ -26,6 +26,11 @@ namespace Echelon {
 		m_UUID = parsed.has_value() ? *parsed : s_UUIDGenerator();
 	}
 
+	UUID UUID::Null()
+	{
+		return UUID(uuids::uuid{});
+	}
+
 	UUID UUID::FromName(const std::string& name)
 	{
 		static std::unordered_map<std::string, UUID> s_UUIDCache;
