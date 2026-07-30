@@ -59,8 +59,8 @@ namespace Echelon {
     // Hierarchy helpers
     // ------------------------------------------------------------------
     void Scene::SetParent(Entity child, Entity parent) {
-        auto childUUID  = static_cast<uint64_t>(child.GetComponent<IDComponent>().ID);
-        auto parentUUID = static_cast<uint64_t>(parent.GetComponent<IDComponent>().ID);
+        auto childUUID  = child.GetComponent<IDComponent>().ID;
+        auto parentUUID = parent.GetComponent<IDComponent>().ID;
 
         // Update child's relationship
         auto& childRC   = child.GetComponent<RelationshipComponent>();
@@ -78,21 +78,21 @@ namespace Echelon {
 
     void Scene::DetachFromParent(Entity entity) {
         auto& rc = entity.GetComponent<RelationshipComponent>();
-        if (rc.Parent == 0)
+        if (!rc.Parent.has_value())
             return;
 
         // Remove from previous parent's children list
-        auto parentEntity = FindEntityByUUID(UUID(rc.Parent));
+        auto parentEntity = FindEntityByUUID(*rc.Parent);
         if (parentEntity) {
             auto& parentRC = parentEntity.GetComponent<RelationshipComponent>();
-            auto childUUID = static_cast<uint64_t>(entity.GetComponent<IDComponent>().ID);
+            auto childUUID = entity.GetComponent<IDComponent>().ID;
             parentRC.Children.erase(
                 std::remove(parentRC.Children.begin(), parentRC.Children.end(), childUUID),
                 parentRC.Children.end()
             );
         }
 
-        rc.Parent = 0;
+        rc.Parent = std::nullopt;
         m_SceneGraph.MarkDirty();
     }
 

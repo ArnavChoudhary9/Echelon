@@ -1,7 +1,7 @@
 Scene: Default Scene
 Entities:
   - IDComponent:
-      ID: 7280899769459319702
+      ID: e05e1d3d-9ba6-4ef9-845b-bd9ea1a488cb
     TagComponent:
       Tag: Triangle
     TransformComponent:
@@ -9,7 +9,7 @@ Entities:
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     RelationshipComponent:
-      Parent: 0
+      Parent: ~
       Children: []
     MeshComponent:
       MeshSource: Triangle
@@ -21,7 +21,7 @@ Entities:
       Roughness: 0.5
       Metallic: 0
   - IDComponent:
-      ID: 17362417465779476410
+      ID: 6376c918-9e30-4ce2-9960-05f57051288e
     TagComponent:
       Tag: Camera
     TransformComponent:
@@ -29,7 +29,7 @@ Entities:
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     RelationshipComponent:
-      Parent: 0
+      Parent: ~
       Children: []
     CameraComponent:
       Primary: true

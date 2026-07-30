@@ -116,9 +116,9 @@ namespace Echelon {
 
         for (const auto& entityNode : entities) {
             // Recover UUID
-            uint64_t uuid = 0;
+            UUID entityUUID;
             if (entityNode["IDComponent"])
-                uuid = entityNode["IDComponent"]["ID"].as<uint64_t>();
+                entityUUID = entityNode["IDComponent"]["ID"].as<UUID>();
 
             // Recover tag / name
             std::string name = "Entity";
@@ -126,7 +126,7 @@ namespace Echelon {
                 name = entityNode["TagComponent"]["Tag"].as<std::string>("Entity");
 
             // Create entity with specific UUID
-            Entity entity = m_Scene->AddEntityWithUUID(UUID(uuid), name);
+            Entity entity = m_Scene->AddEntityWithUUID(entityUUID, name);
 
             // TransformComponent
             if (entityNode["TransformComponent"]) {

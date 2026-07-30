@@ -35,7 +35,7 @@ namespace Echelon {
         // Hash mesh versions + transform data + material versions
         auto view = registry->view<IDComponent, MeshComponent, TransformComponent>();
         for (auto&& [entity, id, mc, tc] : view.each()) {
-            version = HashCombine(version, static_cast<uint64_t>(id.ID));
+            version = HashCombine(version, id.ID.Hash());
             version = HashCombine(version, mc.Version);
 
             // Include transform in version (bit-cast floats)
@@ -108,7 +108,7 @@ namespace Echelon {
             if (!mc.IsValid()) continue; // Skip meshes with no GPU data
 
             DrawCommand cmd;
-            cmd.EntityUUID   = static_cast<uint64_t>(id.ID);
+            cmd.EntityUUID   = id.ID;
             cmd.VertexBuffer = mc.VertexBuffer;
             cmd.IndexBuffer  = mc.IndexBuffer;
             cmd.VertexCount  = mc.VertexCount;

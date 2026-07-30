@@ -4,7 +4,7 @@
 
 namespace Echelon {
 
-    const std::vector<uint64_t> SceneGraph::s_EmptyChildren = {};
+    const std::vector<UUID> SceneGraph::s_EmptyChildren = {};
 
     // ------------------------------------------------------------------
     // Rebuild
@@ -16,7 +16,7 @@ namespace Echelon {
         // 1. Build a node for every entity that has an IDComponent.
         auto idView = registry.view<IDComponent>();
         for (auto&& [entity, id] : idView.each()) {
-            uint64_t uuid  = static_cast<uint64_t>(id.ID);
+            UUID uuid = id.ID;
 
             SceneGraphNode node;
             node.EntityUUID = uuid;
@@ -24,16 +24,16 @@ namespace Echelon {
             // If it has a RelationshipComponent, populate parent/children.
             if (registry.any_of<RelationshipComponent>(entity)) {
                 const auto& rc = registry.get<RelationshipComponent>(entity);
-                node.ParentUUID   = rc.Parent;
+                node.ParentUUID    = rc.Parent;
                 node.ChildrenUUIDs = rc.Children;
             }
 
             m_Nodes[uuid] = std::move(node);
         }
 
-        // 2. Determine root entities (Parent == 0 or parent not found).
+        // 2. Determine root entities (no parent or parent not found).
         for (const auto& [uuid, node] : m_Nodes) {
-            if (node.ParentUUID == 0 || m_Nodes.find(node.ParentUUID) == m_Nodes.end()) {
+            if (!node.ParentUUID.has_value() || m_Nodes.find(*node.ParentUUID) == m_Nodes.end()) {
                 m_RootEntities.push_back(uuid);
             }
         }
@@ -50,12 +50,12 @@ namespace Echelon {
         }
     }
 
-    const std::vector<uint64_t>& SceneGraph::GetRoots(EntityRegistry& registry) {
+    const std::vector<UUID>& SceneGraph::GetRoots(EntityRegistry& registry) {
         EnsureUpToDate(registry);
         return m_RootEntities;
     }
 
-    const std::vector<uint64_t>& SceneGraph::GetChildren(uint64_t entityUUID, EntityRegistry& registry) {
+    const std::vector<UUID>& SceneGraph::GetChildren(UUID entityUUID, EntityRegistry& registry) {
         EnsureUpToDate(registry);
         auto it = m_Nodes.find(entityUUID);
         if (it != m_Nodes.end())
@@ -63,31 +63,31 @@ namespace Echelon {
         return s_EmptyChildren;
     }
 
-    uint64_t SceneGraph::GetParent(uint64_t entityUUID, EntityRegistry& registry) {
+    std::optional<UUID> SceneGraph::GetParent(UUID entityUUID, EntityRegistry& registry) {
         EnsureUpToDate(registry);
         auto it = m_Nodes.find(entityUUID);
         if (it != m_Nodes.end())
             return it->second.ParentUUID;
-        return 0;
+        return std::nullopt;
     }
 
     // ------------------------------------------------------------------
     // DFS Traversal
     // ------------------------------------------------------------------
     void SceneGraph::TraverseDFS(EntityRegistry& registry,
-                                  const std::function<void(uint64_t uuid, int depth)>& callback) {
+                                  const std::function<void(UUID uuid, int depth)>& callback) {
         EnsureUpToDate(registry);
-        for (auto rootUUID : m_RootEntities) {
+        for (const auto& rootUUID : m_RootEntities) {
             TraverseNode(rootUUID, 0, callback);
         }
     }
 
-    void SceneGraph::TraverseNode(uint64_t uuid, int depth,
-                                   const std::function<void(uint64_t, int)>& callback) const {
+    void SceneGraph::TraverseNode(UUID uuid, int depth,
+                                   const std::function<void(UUID, int)>& callback) const {
         callback(uuid, depth);
         auto it = m_Nodes.find(uuid);
         if (it != m_Nodes.end()) {
-            for (auto childUUID : it->second.ChildrenUUIDs) {
+            for (const auto& childUUID : it->second.ChildrenUUIDs) {
                 TraverseNode(childUUID, depth + 1, callback);
             }
         }

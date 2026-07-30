@@ -21,6 +21,7 @@
 #include "glm/glm.hpp"
 #include "yaml-cpp/yaml.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -44,6 +45,21 @@ namespace YAML {
             v.x = node[0].as<float>();
             v.y = node[1].as<float>();
             v.z = node[2].as<float>();
+            return true;
+        }
+    };
+
+    // ---- YAML helpers for UUID ----
+    template<>
+    struct convert<Echelon::UUID> {
+        static Node encode(const Echelon::UUID& uuid) {
+            return Node(uuid.ToString());
+        }
+
+        static bool decode(const Node& node, Echelon::UUID& uuid) {
+            if (!node.IsScalar())
+                return false;
+            uuid = Echelon::UUID(node.as<std::string>());
             return true;
         }
     };
@@ -126,12 +142,12 @@ namespace Echelon {
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {
             out << YAML::Key << "IDComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "ID" << YAML::Value << static_cast<uint64_t>(ID);
+            out << YAML::Key << "ID" << YAML::Value << ID;
             out << YAML::EndMap;
         }
 
         static IDComponent Deserialize(const YAML::Node& node) {
-            return IDComponent(UUID(node["ID"].as<uint64_t>()));
+            return IDComponent(node["ID"].as<UUID>());
         }
     };
 
@@ -230,18 +246,18 @@ namespace Echelon {
     /**
      * @brief Stores parent-child relationships for the scene graph.
      *
-     * - Parent is stored as a UUID (0 / invalid means root-level).
+     * - Parent is nullopt for root-level entities, or the UUID of the parent.
      * - Children are stored as a vector of UUIDs.
      * - The scene graph queries these to build a hierarchy; it only
      *   rebuilds when the dirty flag is set.
      */
     class RelationshipComponent {
     public:
-        uint64_t Parent = 0;                // UUID of parent entity (0 = root)
-        std::vector<uint64_t> Children;     // UUIDs of child entities
+        std::optional<UUID> Parent;         // nullopt = root-level entity
+        std::vector<UUID>   Children;       // UUIDs of child entities
 
         RelationshipComponent() = default;
-        RelationshipComponent(uint64_t parent) : Parent(parent) {}
+        RelationshipComponent(std::optional<UUID> parent) : Parent(parent) {}
         RelationshipComponent(const RelationshipComponent&) = default;
         RelationshipComponent& operator=(const RelationshipComponent&) = default;
         ~RelationshipComponent() = default;
@@ -249,9 +265,13 @@ namespace Echelon {
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {
             out << YAML::Key << "RelationshipComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "Parent" << YAML::Value << Parent;
+            out << YAML::Key << "Parent" << YAML::Value;
+            if (Parent.has_value())
+                out << *Parent;
+            else
+                out << YAML::Null;
             out << YAML::Key << "Children" << YAML::Value << YAML::Flow << YAML::BeginSeq;
-            for (auto child : Children)
+            for (const auto& child : Children)
                 out << child;
             out << YAML::EndSeq;
             out << YAML::EndMap;
@@ -259,10 +279,12 @@ namespace Echelon {
 
         static RelationshipComponent Deserialize(const YAML::Node& node) {
             RelationshipComponent rc;
-            rc.Parent = node["Parent"].as<uint64_t>(0);
+            const auto& parentNode = node["Parent"];
+            if (parentNode && !parentNode.IsNull())
+                rc.Parent = parentNode.as<UUID>();
             if (node["Children"]) {
                 for (const auto& child : node["Children"])
-                    rc.Children.push_back(child.as<uint64_t>());
+                    rc.Children.push_back(child.as<UUID>());
             }
             return rc;
         }

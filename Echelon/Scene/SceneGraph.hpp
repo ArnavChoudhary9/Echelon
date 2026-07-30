@@ -20,7 +20,7 @@
 #include "Core/UUID.hpp"
 #include "ECS/Entity.hpp"
 
-#include <cstdint>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 #include <functional>
@@ -31,9 +31,9 @@ namespace Echelon {
      * @brief A single node in the scene hierarchy.
      */
     struct SceneGraphNode {
-        uint64_t EntityUUID  = 0;                   // Entity this node represents
-        uint64_t ParentUUID  = 0;                   // 0 == root level
-        std::vector<uint64_t> ChildrenUUIDs;        // Direct children
+        UUID                  EntityUUID;               // Entity this node represents
+        std::optional<UUID>   ParentUUID;               // nullopt == root level
+        std::vector<UUID>     ChildrenUUIDs;            // Direct children
     };
 
     /**
@@ -60,7 +60,7 @@ namespace Echelon {
         /**
          * @brief Rebuild the cached graph from current RelationshipComponents.
          *        Called automatically by accessors when dirty.
-         * 
+         *
          * @param registry Reference to the entity registry.
          */
         void Rebuild(EntityRegistry& registry);
@@ -68,13 +68,13 @@ namespace Echelon {
         // ---- Queries (auto-rebuild if dirty) ----
 
         /** Get the root-level entity UUIDs (entities with no parent). */
-        const std::vector<uint64_t>& GetRoots(EntityRegistry& registry);
+        const std::vector<UUID>& GetRoots(EntityRegistry& registry);
 
         /** Get children UUIDs of a given entity. */
-        const std::vector<uint64_t>& GetChildren(uint64_t entityUUID, EntityRegistry& registry);
+        const std::vector<UUID>& GetChildren(UUID entityUUID, EntityRegistry& registry);
 
-        /** Get parent UUID of a given entity (0 if root). */
-        uint64_t GetParent(uint64_t entityUUID, EntityRegistry& registry);
+        /** Get parent UUID of a given entity (nullopt if root). */
+        std::optional<UUID> GetParent(UUID entityUUID, EntityRegistry& registry);
 
         // ---- Traversal ----
 
@@ -83,17 +83,17 @@ namespace Echelon {
          * @param callback  Called for each node with (uuid, depth).
          */
         void TraverseDFS(EntityRegistry& registry,
-                         const std::function<void(uint64_t uuid, int depth)>& callback);
+                         const std::function<void(UUID uuid, int depth)>& callback);
 
     private:
         void EnsureUpToDate(EntityRegistry& registry);
-        void TraverseNode(uint64_t uuid, int depth,
-                          const std::function<void(uint64_t, int)>& callback) const;
+        void TraverseNode(UUID uuid, int depth,
+                          const std::function<void(UUID, int)>& callback) const;
 
         bool m_IsDirty = true;
 
-        std::vector<uint64_t> m_RootEntities;                             // Root-level entities
-        std::unordered_map<uint64_t, SceneGraphNode> m_Nodes;             // UUID -> node
-        static const std::vector<uint64_t> s_EmptyChildren;               // Returned when a UUID has no children
+        std::vector<UUID>                          m_RootEntities;    // Root-level entities
+        std::unordered_map<UUID, SceneGraphNode>   m_Nodes;           // UUID -> node
+        static const std::vector<UUID>             s_EmptyChildren;   // Returned when a UUID has no children
     };
 }

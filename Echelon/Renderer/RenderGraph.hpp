@@ -44,7 +44,7 @@ namespace Echelon {
     // ================================================================
 
     struct DrawCommand {
-        uint64_t     EntityUUID   = 0;
+        UUID         EntityUUID;
         Ref<Buffer>  VertexBuffer;
         Ref<Buffer>  IndexBuffer;       ///< nullptr for non-indexed draws
         uint32_t     VertexCount  = 0;
