@@ -16,6 +16,11 @@ Dep["glad"]          = { include = "%{wks.location}/Vendor/glad/include",  link 
 Dep["yaml"]          = { include = "%{wks.location}/Vendor/yaml/include",  link = "yaml-cpp" }
 Dep["uuid"]          = { include = "%{wks.location}/Vendor/uuid/include" }
 Dep["tinyobjloader"] = { include = "%{wks.location}/Vendor/tinyobjloader" }
+-- Slang is a *prebuilt* SDK: it is not compiled in Vendor/premake5.lua. It carries a
+-- 'libdir' (link-time search path for libslang.so) in addition to include/link.
+Dep["slang"]         = { include = "%{wks.location}/Vendor/slang/include",
+                         libdir  = "%{wks.location}/Vendor/slang/lib",
+                         link    = "slang" }
 
 -- IncludeDir kept for use in filter-scoped token expressions like %{IncludeDir.spdlog}
 IncludeDir = {}

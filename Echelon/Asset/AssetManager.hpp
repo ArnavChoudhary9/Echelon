@@ -24,6 +24,10 @@
 #include "Asset/Asset.hpp"
 #include "Asset/Registry.hpp"
 
+#ifndef ECHELON_DIST
+#include "Platform/FileWatcher.hpp"
+#endif
+
 #include <string>
 #include <vector>
 #include <functional>
@@ -49,8 +53,13 @@ namespace Echelon {
         /** @brief Release cached assets' GPU resources and unhook. Call before renderer shutdown. */
         void Shutdown();
 
-        /** @brief Poll watched file assets for changes and hot-reload them. Call once per frame. */
+#ifndef ECHELON_DIST
+        /** @brief Drain file-watcher events and hot-reload changed assets. Call once per frame. */
         void Update();
+#else
+        /** @brief No-op in Dist builds — hot-reload is compiled out. */
+        void Update() {}
+#endif
 
         /**
          * @brief Seed the registry from `.meta` sidecars found under a directory.
@@ -129,6 +138,10 @@ namespace Echelon {
 
         uint64_t m_Epoch            = 0;
         uint32_t m_RendererListener = 0;
+
+#ifndef ECHELON_DIST
+        FileWatcher m_Watcher;
+#endif
     };
 
 } // namespace Echelon

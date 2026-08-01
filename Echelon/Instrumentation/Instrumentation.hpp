@@ -177,7 +177,14 @@ namespace Echelon {
     }
 }
 
-#define ECHELON_PROFILE 1
+// ECHELON_PROFILE is injected by the build system via premake defines:
+//   Debug / Release : ECHELON_PROFILE=1  (profiling on)
+//   Dist            : not defined         (defaults to 0 — compiled out)
+// Override manually only for targeted investigations; never commit ECHELON_PROFILE=1 hardcoded.
+#ifndef ECHELON_PROFILE
+#   define ECHELON_PROFILE 0
+#endif
+
 #if ECHELON_PROFILE
     // Resolve which function signature macro will be used. Note that this only
 	// is resolved when the (pre)compiler starts, so the syntax highlighting

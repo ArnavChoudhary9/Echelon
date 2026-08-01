@@ -26,20 +26,21 @@ namespace Echelon {
         // Configure vertex attributes using GL 4.3+ separate format API.
         // This decouples the attribute format from the buffer binding,
         // so the actual VBO is associated later via glBindVertexBuffer.
-        uint32_t index = 0;
+        // The attribute index is the shader input Location (from reflection),
+        // not a running counter — so it lines up with the SPIR-V layout(location=N).
         for (const auto& attr : m_Layout.Attributes) {
-            uint32_t count = OpenGLUtils::GetComponentCount(attr.Format);
-            GLenum   type  = OpenGLUtils::ToGLBaseType(attr.Format);
-            bool     isInt = OpenGLUtils::IsIntegerFormat(attr.Format);
+            const GLuint loc   = static_cast<GLuint>(attr.Location);
+            uint32_t     count = OpenGLUtils::GetComponentCount(attr.Format);
+            GLenum       type  = OpenGLUtils::ToGLBaseType(attr.Format);
+            bool         isInt = OpenGLUtils::IsIntegerFormat(attr.Format);
 
-            glEnableVertexAttribArray(index);
+            glEnableVertexAttribArray(loc);
             if (isInt) {
-                glVertexAttribIFormat(index, count, type, attr.Offset);
+                glVertexAttribIFormat(loc, count, type, attr.Offset);
             } else {
-                glVertexAttribFormat(index, count, type, GL_FALSE, attr.Offset);
+                glVertexAttribFormat(loc, count, type, GL_FALSE, attr.Offset);
             }
-            glVertexAttribBinding(index, attr.Binding);
-            ++index;
+            glVertexAttribBinding(loc, attr.Binding);
         }
 
         glBindVertexArray(0);

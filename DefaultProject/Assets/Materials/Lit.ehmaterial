@@ -1,0 +1,12 @@
+Material:
+  Shader: Shaders/Basic.slang
+  Params:
+    AlbedoColor:
+      Type: Float4
+      Value: [1.0, 0.55, 0.2, 1.0]
+    Roughness:
+      Type: Float
+      Value: [0.4]
+    Metallic:
+      Type: Float
+      Value: [0.0]

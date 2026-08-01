@@ -17,7 +17,7 @@ namespace Echelon {
 
     namespace MeshPrimitives {
 
-        /** @brief A unit cube ([-0.5, 0.5]) with per-corner colors. */
+        /** @brief A unit cube ([-0.5, 0.5]) with per-face normals and 0..1 UVs. */
         Ref<Mesh> CreateCube();
 
         // Extend here: CreatePlane(), CreateSphere(), CreateQuad(), ...

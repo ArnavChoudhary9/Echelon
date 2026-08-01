@@ -167,28 +167,30 @@ namespace Echelon {
         // ---- Draw commands ----
 
         /**
-         * @brief Submit an indexed draw call.
+         * @brief Submit an indexed draw call.  The pipeline must already be
+         *        bound via BindPipeline() before calling this.
          * @param vertexBuffer Vertex data.
          * @param indexBuffer  Index data.
-         * @param pipeline     Graphics pipeline (shader + state).
+         * @param shader       Shader used to upload per-draw uniforms (model/view/proj).
          * @param transform    Model matrix.
          * @param indexCount   Number of indices to draw (0 = use full buffer).
          */
         virtual void DrawIndexed(const Ref<Buffer>& vertexBuffer,
                                  const Ref<Buffer>& indexBuffer,
-                                 const Ref<Pipeline>& pipeline,
+                                 const Ref<Shader>& shader,
                                  const glm::mat4& transform,
                                  uint32_t indexCount = 0) = 0;
 
         /**
-         * @brief Submit a non-indexed draw call.
+         * @brief Submit a non-indexed draw call.  The pipeline must already be
+         *        bound via BindPipeline() before calling this.
          * @param vertexBuffer Vertex data.
-         * @param pipeline     Graphics pipeline (shader + state).
+         * @param shader       Shader used to upload per-draw uniforms (model/view/proj).
          * @param transform    Model matrix.
          * @param vertexCount  Number of vertices.
          */
         virtual void Draw(const Ref<Buffer>& vertexBuffer,
-                          const Ref<Pipeline>& pipeline,
+                          const Ref<Shader>& shader,
                           const glm::mat4& transform,
                           uint32_t vertexCount) = 0;
 

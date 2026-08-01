@@ -2,25 +2,23 @@
 
 /**
  * @file MeshVertex.hpp
- * @brief Canonical interleaved vertex format for Mesh assets.
+ * @brief The single canonical interleaved vertex format for Mesh assets.
+ *
+ * There is exactly ONE vertex format in the engine. The mesh loader always fills
+ * these fields and never knows about any specific shader's layout — a shader's
+ * reflected vertex inputs are matched onto this canonical vertex by *location*
+ * (see StandardVertex.hpp). Location convention: Position=0, Normal=1, TexCoord=2.
  */
 
 #include "glm/glm.hpp"
 
 namespace Echelon {
 
-    /**
-     * @brief One interleaved mesh vertex.
-     *
-     * IMPORTANT: this layout must match the renderer's default "Flat" pipeline
-     * (a_Position: loc 0, Float3, offset 0; a_Color: loc 1, Float3, offset 12;
-     * stride 24 bytes). See Ray/RayRenderer.cpp::CreateDefaultResources. When
-     * richer pipelines are added, extend this struct and carry a VertexLayout on
-     * the Mesh so importers/pipelines stay in sync.
-     */
+    /** @brief One interleaved mesh vertex (32 bytes). */
     struct MeshVertex {
-        glm::vec3 Position{ 0.0f };
-        glm::vec3 Color{ 1.0f };
+        glm::vec3 Position{ 0.0f };   // location 0
+        glm::vec3 Normal{ 0.0f };     // location 1
+        glm::vec2 TexCoord{ 0.0f };   // location 2
     };
 
 } // namespace Echelon

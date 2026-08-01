@@ -6,10 +6,14 @@
 #include "Asset/Importers/ImportResult.hpp"
 #include "Asset/Importers/OBJ/OBJImporter.hpp"
 #include "Asset/Importers/Scene/SceneImporter.hpp"
+#include "Asset/Importers/Shader/ShaderImporter.hpp"
+#include "Asset/Importers/Material/MaterialImporter.hpp"
 #include "Asset/Mesh/Mesh.hpp"
 #include "Asset/Mesh/Primitives.hpp"
+#include "Asset/Material/Material.hpp"
 
 #include "Renderer/RendererService.hpp"
+#include "Renderer/RendererLoader.hpp"   // ExecutableDir() for the built-in shader path
 #include "Project/Project.hpp"
 #include "Core/Log.hpp"
 
@@ -39,13 +43,28 @@ namespace Echelon {
         // Engine loader back-ends.
         RegisterImporter(CreateRef<OBJImporter>());
         RegisterImporter(CreateRef<SceneImporter>());
+        RegisterImporter(CreateRef<ShaderImporter>());
+        RegisterImporter(CreateRef<MaterialImporter>());
 
         // Procedural built-in shapes ("internal shape repository").
         RegisterPrimitive("Cube", []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
 
+        // Built-in default material — used to auto-fill empty MaterialComponents so
+        // every renderable has a real material object (backed by the Flat shader,
+        // which ships next to the executable).
+        RegisterPrimitive("DefaultMaterial", []() -> Ref<Asset> {
+            auto mat = CreateRef<Material>();
+            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Flat.slang").string();
+            return mat;
+        });
+
         // Rebuild GPU resources whenever the active renderer (back-end) changes.
         m_RendererListener = Renderer::Get().AddChangeListener(
             [this](RendererAPI* r) { OnRendererChanged(r); });
+
+#ifndef ECHELON_DIST
+        m_Watcher.Start();
+#endif
 
         ECHELON_LOG_INFO("[Asset] AssetManager initialized ({} extension handlers).",
                          m_ImportersByExt.size());
@@ -61,24 +80,21 @@ namespace Echelon {
             if (asset) asset->ReleaseGPU();
         }
         m_Loaded.clear();
+
+#ifndef ECHELON_DIST
+        m_Watcher.Stop();
+#endif
     }
 
+#ifndef ECHELON_DIST
     void AssetManager::Update() {
-        // Collect first, reload after — reloading mutates the registry/cache.
-        std::vector<UUID> toReload;
-        for (const auto& [handle, meta] : m_Registry.GetAll()) {
-            if (meta.IsMemoryOnly || !meta.WatchForChanges) continue;
-            if (m_Loaded.find(handle) == m_Loaded.end()) continue; // only watch loaded assets
-
-            std::error_code ec;
-            auto now = fs::last_write_time(meta.FilePath, ec);
-            if (ec) continue;
-            if (now != meta.LastWriteTime) toReload.push_back(handle);
+        for (const auto& path : m_Watcher.Poll()) {
+            UUID handle = m_Registry.GetHandleFromPath(path.string());
+            if (!handle.IsNull())
+                ReloadAsset(handle);
         }
-
-        for (const auto& handle : toReload)
-            ReloadAsset(handle);
     }
+#endif
 
     void AssetManager::RefreshRegistry(const fs::path& directory) {
         std::error_code ec;
@@ -195,6 +211,11 @@ namespace Echelon {
         meta.LastWriteTime = fs::last_write_time(absolutePath, ec);
 
         m_Registry.SetMetadata(meta);
+
+#ifndef ECHELON_DIST
+        if (!meta.IsMemoryOnly && meta.WatchForChanges)
+            m_Watcher.Watch(absolutePath);
+#endif
 
         // Persist the sidecar so the handle is stable across runs.
         if (!fs::exists(metaPath, ec))

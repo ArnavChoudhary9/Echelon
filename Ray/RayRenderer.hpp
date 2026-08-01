@@ -20,6 +20,9 @@
 #include "Echelon/Renderer/RenderGraph.hpp"
 #include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
 #include "Echelon/GraphicsAPI/Device.hpp"
+#include "Echelon/Asset/Shader/ShaderAsset.hpp"
+
+#include <unordered_map>
 
 namespace Echelon {
 
@@ -48,12 +51,12 @@ namespace Echelon {
         // ---- Draw commands ----
         void DrawIndexed(const Ref<Buffer>& vertexBuffer,
                          const Ref<Buffer>& indexBuffer,
-                         const Ref<Pipeline>& pipeline,
+                         const Ref<Shader>& shader,
                          const glm::mat4& transform,
                          uint32_t indexCount = 0) override;
 
         void Draw(const Ref<Buffer>& vertexBuffer,
-                  const Ref<Pipeline>& pipeline,
+                  const Ref<Shader>& shader,
                   const glm::mat4& transform,
                   uint32_t vertexCount) override;
 
@@ -75,6 +78,18 @@ namespace Echelon {
     private:
         void CreateDefaultResources();
 
+        /** @brief Load a shader asset and ensure its GPU program exists (renderer is not yet active during Init). */
+        Ref<ShaderAsset> LoadShaderAsset(const std::string& name);
+
+        /** @brief Build the default (Flat) pipeline from the flat shader's reflection. */
+        void BuildDefaultPipeline();
+
+        /** @brief Rebuild GPU resources if a shader/material was hot-reloaded (epoch bumped). */
+        void EnsureUpToDate();
+
+        /** @brief Bind g_Frame / g_Object (resolved by name) for the given pipeline's shader. */
+        void BindSystemConstants(const Ref<Pipeline>& pipeline);
+
         bool m_Initialized = false;
 
         uint32_t m_ViewportWidth  = 0;
@@ -92,10 +107,21 @@ namespace Echelon {
         Ref<RenderPass>        m_DefaultRenderPass;
         Ref<Swapchain>         m_Swapchain;
 
-        // ---- Default shaders & pipeline ----
-        Ref<Shader>   m_BasicShader;
-        Ref<Shader>   m_FlatShader;
-        Ref<Pipeline> m_FlatPipeline;
+        // ---- Default shader asset & pipeline (reflection-driven) ----
+        Ref<ShaderAsset> m_FlatShaderAsset;
+        Ref<Pipeline>    m_FlatPipeline;
+
+        // ---- System constant buffers (the fixed shader ABI: g_Frame / g_Object) ----
+        Ref<Buffer>              m_FrameUBO;    ///< FrameConstants — written once per frame.
+        Ref<Buffer>              m_ObjectUBO;   ///< ObjectConstants — rewritten per draw.
+        Ref<DescriptorSetLayout> m_SystemLayout;
+
+        // One system descriptor set per shader — g_Frame/g_Object bindings are
+        // assigned per-shader, so a shared set would leave stale bindings that could
+        // clobber a material's own binding. Cleared when the asset epoch changes.
+        std::unordered_map<Shader*, Ref<DescriptorSet>> m_SystemSets;
+
+        uint64_t m_LastAssetEpoch = 0;   ///< AssetManager epoch at last pipeline (re)build.
 
         // ---- Render graph (caches draw commands across frames) ----
         RenderGraph   m_RenderGraph;

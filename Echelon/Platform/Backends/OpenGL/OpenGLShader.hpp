@@ -4,7 +4,10 @@
  * @file OpenGLShader.hpp
  * @brief OpenGL implementation of the Shader interface.
  *
- * Compiles GLSL source into an OpenGL shader program.
+ * Ingests SPIR-V directly via GL_ARB_gl_spirv (glShaderBinary +
+ * glSpecializeShader). A GLSL text path is retained as a fallback for shaders
+ * whose stage Format is GLSL. Uniforms are supplied via UBOs (SPIR-V forbids
+ * default-block uniforms), so the classic glUniform* setters are gone.
  */
 
 #include "Echelon/GraphicsAPI/Shader.hpp"
@@ -21,22 +24,22 @@ namespace Echelon {
 
         const std::string& GetName() const override { return m_Name; }
         bool HasStage(ShaderStage stage) const override;
+        const ShaderReflection& GetReflection() const override { return m_Reflection; }
 
         GLuint GetProgram() const { return m_Program; }
 
-        /** @brief Set a uniform by name (helpers for common types). */
-        void SetInt(const std::string& name, int value) const override;
-        void SetFloat(const std::string& name, float value) const override;
-        void SetVec3(const std::string& name, float x, float y, float z) const override;
-        void SetVec4(const std::string& name, float x, float y, float z, float w) const override;
-        void SetMat4(const std::string& name, const float* value) const override;
-
     private:
-        GLuint CompileStage(GLenum type, const char* source, uint32_t length);
+        /**
+         * @brief Compile one stage from a ShaderStageDesc.
+         * SPIR-V stages are ingested with glShaderBinary + glSpecializeShader;
+         * GLSL stages fall back to glShaderSource + glCompileShader.
+         */
+        GLuint CompileStage(const ShaderStageDesc& stage);
 
-        GLuint      m_Program = 0;
-        std::string m_Name;
+        GLuint           m_Program = 0;
+        std::string      m_Name;
         std::unordered_set<ShaderStage> m_Stages;
+        ShaderReflection m_Reflection;
     };
 
 } // namespace Echelon

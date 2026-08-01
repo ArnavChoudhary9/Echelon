@@ -32,10 +32,7 @@ Entities:
     MeshComponent:
       MeshSource: Meshs/Monkey.obj
     MaterialComponent:
-      ShaderName: Flat
-      AlbedoColor: [1, 1, 1, 1]
-      Roughness: 0.5
-      Metallic: 0
+      MaterialSource: Materials/Lit.ehmaterial
   - IDComponent:
       ID: 6376c918-9e30-4ce2-9960-05f57051288e
     TagComponent:

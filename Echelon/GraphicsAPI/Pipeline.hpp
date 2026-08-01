@@ -49,9 +49,10 @@ namespace Echelon {
     struct VertexAttribute
     {
         std::string           Name;
-        VertexAttributeFormat Format  = VertexAttributeFormat::Float3;
-        uint32_t              Offset  = 0;
-        uint32_t              Binding = 0;
+        VertexAttributeFormat Format   = VertexAttributeFormat::Float3;
+        uint32_t              Offset   = 0;
+        uint32_t              Binding  = 0;
+        uint32_t              Location = 0;   ///< Shader input location (GL attribute index). Set from reflection.
     };
 
     /**

@@ -4,6 +4,29 @@
 #include <memory>
 #include <filesystem>
 
+// ---- Symbol visibility / DLL export-import ----
+// ENGINE_API decorates symbols that cross the engine shared-library boundary.
+//
+// Usage:
+//   class ENGINE_API MyClass { ... };
+//   ENGINE_API void MyFunc();
+//
+// Build-system rules (set by premake):
+//   Building the engine DLL  → ECHELON_BUILD_DLL is defined → dllexport / visibility("default")
+//   Consuming the engine DLL → neither defined               → dllimport  / visibility("default")
+//
+// On Linux / macOS all symbols are visible by default, so the attribute is
+// a no-op in practice; it documents intent and keeps the API surface explicit.
+#if defined(ECHELON_PLATFORM_WINDOWS)
+    #ifdef ECHELON_BUILD_DLL
+        #define ENGINE_API __declspec(dllexport)
+    #else
+        #define ENGINE_API __declspec(dllimport)
+    #endif
+#else
+    #define ENGINE_API __attribute__((visibility("default")))
+#endif
+
 namespace Echelon {
     /**
      * @brief Engine-wide shorthand for the standard filesystem namespace.

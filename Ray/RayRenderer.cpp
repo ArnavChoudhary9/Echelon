@@ -1,5 +1,4 @@
 #include "RayRenderer.hpp"
-#include "RayShaders.hpp"
 
 #include "Echelon/Core/Log.hpp"
 #include "Echelon/GraphicsAPI/Buffer.hpp"
@@ -8,10 +7,42 @@
 #include "Echelon/GraphicsAPI/Swapchain.hpp"
 #include "Echelon/GraphicsAPI/RenderPass.hpp"
 #include "Echelon/GraphicsAPI/CommandBuffer.hpp"
+#include "Echelon/GraphicsAPI/DescriptorSet.hpp"
+
+#include "Echelon/Asset/AssetManager.hpp"
+#include "Echelon/Asset/Mesh/StandardVertex.hpp"
+#include "Echelon/Renderer/RendererLoader.hpp"   // ExecutableDir()
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtc/matrix_inverse.hpp"             // inverseTranspose
 
 #include <cstring>
 
 namespace Echelon {
+
+    // ------------------------------------------------------------------
+    // CPU mirrors of the shader constant system (Echelon.slang). Sizes must
+    // match the std140 layout Slang reflects (Frame = 224B, Object = 128B).
+    // ------------------------------------------------------------------
+    struct FrameConstantsCPU {
+        glm::mat4 View{ 1.0f };
+        glm::mat4 Projection{ 1.0f };
+        glm::mat4 ViewProjection{ 1.0f };
+        glm::vec4 CameraPosition{ 0.0f };
+        glm::vec4 TimeParams{ 0.0f };
+    };
+    struct ObjectConstantsCPU {
+        glm::mat4 Model{ 1.0f };
+        glm::mat4 NormalMatrix{ 1.0f };
+    };
+
+    // Find a reflected uniform buffer's binding by name. Returns false if absent.
+    static bool FindUBOBinding(const ShaderReflection& refl, const char* name, uint32_t& outBinding) {
+        for (const auto& ub : refl.UniformBuffers) {
+            if (ub.Name == name) { outBinding = ub.Binding; return true; }
+        }
+        return false;
+    }
 
     // ------------------------------------------------------------------
     // Construction / destruction
@@ -34,7 +65,6 @@ namespace Echelon {
         m_ViewportHeight = height;
         m_Stats          = {};
 
-        // Create the graphics API using the build-configured default backend
         m_GraphicsAPI = GraphicsAPI::Create(GraphicsAPI::GetDefaultBackend());
         if (!m_GraphicsAPI) {
             ECHELON_LOG_ERROR("Ray: Failed to create GraphicsAPI");
@@ -46,17 +76,15 @@ namespace Echelon {
             return false;
         }
 
-        // Create the device
         m_Device = m_GraphicsAPI->CreateDevice();
         if (!m_Device) {
             ECHELON_LOG_ERROR("Ray: Failed to create device");
             return false;
         }
 
-        // Create command buffer
         m_CommandBuffer = m_Device->CreateCommandBuffer();
 
-        // Create default render pass (render to default framebuffer)
+        // Default render pass (render to default framebuffer)
         RenderPassDesc rpDesc;
         ColorAttachmentDesc colorAtt;
         colorAtt.Format = TextureFormat::RGBA8_UNORM;
@@ -74,7 +102,6 @@ namespace Echelon {
         rpDesc.DebugName = "Ray_DefaultPass";
         m_DefaultRenderPass = m_Device->CreateRenderPass(rpDesc);
 
-        // Create swapchain
         SwapchainDesc swapDesc;
         swapDesc.Width        = width;
         swapDesc.Height       = height;
@@ -82,7 +109,6 @@ namespace Echelon {
         swapDesc.VSync        = true;
         m_Swapchain = m_Device->CreateSwapchain(swapDesc);
 
-        // Create default shaders and pipeline
         CreateDefaultResources();
 
         m_Initialized = true;
@@ -91,16 +117,16 @@ namespace Echelon {
     }
 
     void RayRenderer::Shutdown() {
-        // Idempotent: the renderer service shuts the active renderer down
-        // explicitly, and the plugin loader's Unload() calls Shutdown() again
-        // before destroying the instance. Guard so teardown (and its log) runs
-        // exactly once.
+        // Idempotent (see header note).
         if (!m_Initialized)
             return;
 
+        m_SystemSets.clear();
+        m_SystemLayout      = nullptr;
+        m_FrameUBO          = nullptr;
+        m_ObjectUBO         = nullptr;
         m_FlatPipeline      = nullptr;
-        m_FlatShader        = nullptr;
-        m_BasicShader       = nullptr;
+        m_FlatShaderAsset   = nullptr;
         m_Swapchain         = nullptr;
         m_DefaultRenderPass = nullptr;
         m_CommandBuffer     = nullptr;
@@ -115,78 +141,122 @@ namespace Echelon {
     // Resource creation
     // ------------------------------------------------------------------
 
-    static Ref<Shader> CompileGLSL(const Ref<Device>& device,
-                                    const std::string& vertSrc, const std::string& fragSrc,
-                                    const std::string& name)
-    {
-        ShaderDesc desc;
-        desc.DebugName = name;
+    Ref<ShaderAsset> RayRenderer::LoadShaderAsset(const std::string& name) {
+        // Engine/renderer shaders ship next to the executable in Shaders/.
+        const fs::path path = RendererLoader::ExecutableDir() / "Shaders" / name;
 
-        ShaderStageDesc vertStage;
-        vertStage.Stage  = ShaderStage::Vertex;
-        vertStage.Format = ShaderSourceFormat::GLSL;
-        vertStage.Source.assign(reinterpret_cast<const uint8_t*>(vertSrc.data()),
-                                reinterpret_cast<const uint8_t*>(vertSrc.data()) + vertSrc.size());
-        desc.Stages.push_back(vertStage);
+        auto& assets = AssetManager::Get();
+        UUID handle  = assets.GetHandle(path.string());
+        if (handle.IsNull()) {
+            ECHELON_LOG_ERROR("Ray: could not resolve shader '{}'", path.string());
+            return nullptr;
+        }
 
-        ShaderStageDesc fragStage;
-        fragStage.Stage  = ShaderStage::Fragment;
-        fragStage.Format = ShaderSourceFormat::GLSL;
-        fragStage.Source.assign(reinterpret_cast<const uint8_t*>(fragSrc.data()),
-                                reinterpret_cast<const uint8_t*>(fragSrc.data()) + fragSrc.size());
-        desc.Stages.push_back(fragStage);
+        auto shader = assets.GetAssetAs<ShaderAsset>(handle);
+        if (!shader) {
+            ECHELON_LOG_ERROR("Ray: '{}' is not a ShaderAsset", path.string());
+            return nullptr;
+        }
 
-        return device->CreateShader(desc);
+        // The renderer is not "active" during its own Init (RendererService assigns
+        // m_Active only after Init returns), so AssetManager cannot auto-upload. Do
+        // it here — this renderer *is* the RendererAPI the asset uploads against.
+        shader->UploadGPU(this);
+        return shader;
     }
 
-    void RayRenderer::CreateDefaultResources()
-    {
-        // Compile the basic PBR shader (file-based with fallback)
-        m_BasicShader = CompileGLSL(m_Device,
-                                     RayShaders::GetBasicVertexShader(),
-                                     RayShaders::GetBasicFragmentShader(),
-                                     "Ray_BasicShader");
+    void RayRenderer::CreateDefaultResources() {
+        // Per-draw / per-frame system UBOs (the fixed shader ABI).
+        BufferDesc frameDesc;
+        frameDesc.Size      = sizeof(FrameConstantsCPU);
+        frameDesc.Usage     = BufferUsage::UniformBuffer;
+        frameDesc.Memory    = MemoryUsage::CPUToGPU;
+        frameDesc.DebugName = "Ray_FrameUBO";
+        m_FrameUBO = m_Device->CreateBuffer(frameDesc);
 
-        // Compile the flat colour shader (file-based with fallback)
-        m_FlatShader = CompileGLSL(m_Device,
-                                    RayShaders::GetFlatVertexShader(),
-                                    RayShaders::GetFlatFragmentShader(),
-                                    "Ray_FlatShader");
+        BufferDesc objDesc;
+        objDesc.Size      = sizeof(ObjectConstantsCPU);
+        objDesc.Usage     = BufferUsage::UniformBuffer;
+        objDesc.Memory    = MemoryUsage::CPUToGPU;
+        objDesc.DebugName = "Ray_ObjectUBO";
+        m_ObjectUBO = m_Device->CreateBuffer(objDesc);
 
-        // Create a pipeline for the flat shader (position + color)
+        // A generic 2-binding layout (GL ignores layout at bind time; buffers are
+        // assigned to the per-shader reflected bindings in BindSystemConstants).
+        DescriptorSetLayoutDesc slDesc;
+        slDesc.Bindings = {
+            { 0, DescriptorType::UniformBuffer, 1, ShaderStage::Vertex },
+            { 1, DescriptorType::UniformBuffer, 1, ShaderStage::Vertex },
+        };
+        slDesc.DebugName = "Ray_SystemLayout";
+        m_SystemLayout = m_Device->CreateDescriptorSetLayout(slDesc);
+
+        m_FlatShaderAsset = LoadShaderAsset("Flat.slang");
+        BuildDefaultPipeline();
+
+        m_LastAssetEpoch = AssetManager::Get().GetEpoch();
+    }
+
+    void RayRenderer::BuildDefaultPipeline() {
+        m_FlatPipeline = nullptr;
+        if (!m_FlatShaderAsset || !m_FlatShaderAsset->GetGpuShader()) {
+            ECHELON_LOG_ERROR("Ray: no flat shader — default pipeline not built");
+            return;
+        }
+
         PipelineDesc pipeDesc;
-        pipeDesc.ShaderProgram = m_FlatShader;
+        pipeDesc.ShaderProgram = m_FlatShaderAsset->GetGpuShader();
         pipeDesc.Topology      = PrimitiveTopology::TriangleList;
         pipeDesc.Pass          = m_DefaultRenderPass;
         pipeDesc.DebugName     = "Ray_FlatPipeline";
 
-        // Vertex layout: vec3 position + vec3 color
-        VertexBinding vb;
-        vb.Binding   = 0;
-        vb.Stride    = sizeof(float) * 6;  // 3 pos + 3 color
-        vb.InputRate = VertexInputRate::PerVertex;
+        // Vertex layout comes entirely from reflection — no hand-written attributes.
+        pipeDesc.Layout = StandardVertex::FromReflection(m_FlatShaderAsset->GetReflection());
 
-        VertexAttribute posAttr;
-        posAttr.Name    = "a_Position";
-        posAttr.Format  = VertexAttributeFormat::Float3;
-        posAttr.Offset  = 0;
-        posAttr.Binding = 0;
-
-        VertexAttribute colorAttr;
-        colorAttr.Name    = "a_Color";
-        colorAttr.Format  = VertexAttributeFormat::Float3;
-        colorAttr.Offset  = sizeof(float) * 3;
-        colorAttr.Binding = 0;
-
-        pipeDesc.Layout.Bindings   = { vb };
-        pipeDesc.Layout.Attributes = { posAttr, colorAttr };
-
-        // Depth test enabled, back-face culling disabled for demo
         pipeDesc.Depth.DepthTestEnable  = true;
         pipeDesc.Depth.DepthWriteEnable = true;
         pipeDesc.Raster.Cull            = CullMode::None;
 
         m_FlatPipeline = m_Device->CreatePipeline(pipeDesc);
+    }
+
+    void RayRenderer::EnsureUpToDate() {
+        const uint64_t epoch = AssetManager::Get().GetEpoch();
+        if (epoch == m_LastAssetEpoch)
+            return;
+
+        // A shader/material hot-reload (or renderer swap) rebuilt GPU programs; the
+        // pipeline holds the *old* GL program, so rebuild it and drop stale sets.
+        m_SystemSets.clear();
+        if (m_FlatShaderAsset) {
+            m_FlatShaderAsset->UploadGPU(this);   // rebuild the GL program if released
+            BuildDefaultPipeline();
+        }
+        m_LastAssetEpoch = epoch;
+    }
+
+    // ------------------------------------------------------------------
+    // System constant binding (resolve g_Frame / g_Object by name per shader)
+    // ------------------------------------------------------------------
+
+    void RayRenderer::BindSystemConstants(const Ref<Pipeline>& pipeline) {
+        if (!pipeline) return;
+        Ref<Shader> shader = pipeline->GetShader();
+        if (!shader) return;
+
+        auto it = m_SystemSets.find(shader.get());
+        if (it == m_SystemSets.end()) {
+            const ShaderReflection& refl = shader->GetReflection();
+            auto set = m_Device->AllocateDescriptorSet(m_SystemLayout);
+
+            uint32_t binding = 0;
+            if (FindUBOBinding(refl, "g_Frame", binding))  set->SetBuffer(binding, m_FrameUBO);
+            if (FindUBOBinding(refl, "g_Object", binding)) set->SetBuffer(binding, m_ObjectUBO);
+            set->Update();
+
+            it = m_SystemSets.emplace(shader.get(), set).first;
+        }
+        m_CommandBuffer->BindDescriptorSet(it->second, 0);
     }
 
     // ------------------------------------------------------------------
@@ -201,10 +271,18 @@ namespace Echelon {
         m_Stats            = {};
         (void)clearValue; // Clear colour is configured on the render pass
 
+        // Upload per-frame constants once.
+        FrameConstantsCPU fc;
+        fc.View           = m_ViewMatrix;
+        fc.Projection     = m_ProjectionMatrix;
+        fc.ViewProjection = m_ProjectionMatrix * m_ViewMatrix;
+        fc.CameraPosition = glm::inverse(m_ViewMatrix)[3];
+        fc.TimeParams     = glm::vec4(0.0f);
+        if (m_FrameUBO) m_FrameUBO->SetData(&fc, sizeof(fc));
+
         m_GraphicsAPI->BeginFrame();
         m_CommandBuffer->Begin();
 
-        // Set viewport for this frame
         Viewport vp;
         vp.X      = 0.0f;
         vp.Y      = 0.0f;
@@ -212,7 +290,6 @@ namespace Echelon {
         vp.Height = static_cast<float>(m_ViewportHeight);
         m_CommandBuffer->SetViewport(vp);
 
-        // Render to default framebuffer — clear ops are driven by the render pass
         m_CommandBuffer->BeginRenderPass(m_DefaultRenderPass, nullptr);
     }
 
@@ -222,23 +299,15 @@ namespace Echelon {
 
         m_GraphicsAPI->Submit(m_CommandBuffer);
         m_GraphicsAPI->EndFrame();
-
-        // Note: presentation (buffer swap) is handled by the Application
-        // loop via Window::SwapBuffers().  We do NOT call Swapchain::Present()
-        // here to avoid double-swapping.
+        // Presentation is handled by the Application loop via Window::SwapBuffers().
     }
 
     // ------------------------------------------------------------------
     // Scene scope
     // ------------------------------------------------------------------
 
-    void RayRenderer::BeginScene(const Ref<Scene>& /*scene*/) {
-        // Upload scene-global data (lights, environment) — placeholder
-    }
-
-    void RayRenderer::EndScene() {
-        // Post-processing passes — placeholder
-    }
+    void RayRenderer::BeginScene(const Ref<Scene>& /*scene*/) {}
+    void RayRenderer::EndScene() {}
 
     // ------------------------------------------------------------------
     // Scene-driven rendering via RenderGraph
@@ -247,29 +316,32 @@ namespace Echelon {
     void RayRenderer::RenderScene(const Ref<Scene>& scene) {
         if (!scene) return;
 
-        // Update the render graph — early-outs if nothing changed
+        EnsureUpToDate();
+
         m_RenderGraph.Update(scene, m_FlatPipeline);
 
-        // Issue draw calls from pipeline-sorted groups.
-        // Each PipelineGroup shares a pipeline — bind once, draw all batches.
         for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
             const auto& pipeline = group.PipelineRef ? group.PipelineRef : m_FlatPipeline;
+            if (!pipeline) continue;
+
+            m_CommandBuffer->BindPipeline(pipeline);
+            BindSystemConstants(pipeline);   // g_Frame + g_Object at this shader's bindings
+            const auto& shader = pipeline->GetShader();
 
             for (const auto& batch : group.Batches) {
                 for (size_t i = 0; i < batch.Transforms.size(); ++i) {
-                    const auto& transform = batch.Transforms[i];
+                    // Per-entity material parameters/textures (null for the default
+                    // pipeline). Bound before the draw; its bindings never collide
+                    // with the system set within a shader (Slang assigns unique ones).
+                    if (i < batch.MaterialSets.size() && batch.MaterialSets[i])
+                        m_CommandBuffer->BindDescriptorSet(batch.MaterialSets[i], 1);
 
+                    const auto& transform = batch.Transforms[i];
                     if (batch.IndexBuffer && batch.IndexCount > 0) {
-                        DrawIndexed(batch.VertexBuffer,
-                                    batch.IndexBuffer,
-                                    pipeline,
-                                    transform,
-                                    batch.IndexCount);
+                        DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader,
+                                    transform, batch.IndexCount);
                     } else {
-                        Draw(batch.VertexBuffer,
-                             pipeline,
-                             transform,
-                             batch.VertexCount);
+                        Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
                     }
                 }
             }
@@ -277,28 +349,22 @@ namespace Echelon {
     }
 
     // ------------------------------------------------------------------
-    // Draw commands
+    // Draw commands — each draw rewrites g_Object, so every index gets its own
+    // transform with the SAME bound pipeline (no pipeline change per draw).
     // ------------------------------------------------------------------
 
     void RayRenderer::DrawIndexed(const Ref<Buffer>& vertexBuffer,
                                    const Ref<Buffer>& indexBuffer,
-                                   const Ref<Pipeline>& pipeline,
+                                   const Ref<Shader>& /*shader*/,
                                    const glm::mat4& transform,
                                    uint32_t indexCount) {
         m_Stats.DrawCalls++;
 
-        // Bind pipeline
-        m_CommandBuffer->BindPipeline(pipeline);
+        ObjectConstantsCPU oc;
+        oc.Model        = transform;
+        oc.NormalMatrix = glm::mat4(glm::inverseTranspose(glm::mat3(transform)));
+        if (m_ObjectUBO) m_ObjectUBO->SetData(&oc, sizeof(oc));
 
-        // Set uniforms via the abstract Shader interface
-        auto shader = pipeline->GetShader();
-        if (shader) {
-            shader->SetMat4("u_Model",      &transform[0][0]);
-            shader->SetMat4("u_View",       &m_ViewMatrix[0][0]);
-            shader->SetMat4("u_Projection", &m_ProjectionMatrix[0][0]);
-        }
-
-        // Bind buffers and draw
         m_CommandBuffer->BindVertexBuffer(vertexBuffer);
         m_CommandBuffer->BindIndexBuffer(indexBuffer);
 
@@ -310,21 +376,15 @@ namespace Echelon {
     }
 
     void RayRenderer::Draw(const Ref<Buffer>& vertexBuffer,
-                            const Ref<Pipeline>& pipeline,
-                            const glm::mat4& transform,
-                            uint32_t vertexCount) {
+                           const Ref<Shader>& /*shader*/,
+                           const glm::mat4& transform,
+                           uint32_t vertexCount) {
         m_Stats.DrawCalls++;
 
-        // Bind pipeline
-        m_CommandBuffer->BindPipeline(pipeline);
-
-        // Set uniforms via the abstract Shader interface
-        auto shader = pipeline->GetShader();
-        if (shader) {
-            shader->SetMat4("u_Model",      &transform[0][0]);
-            shader->SetMat4("u_View",       &m_ViewMatrix[0][0]);
-            shader->SetMat4("u_Projection", &m_ProjectionMatrix[0][0]);
-        }
+        ObjectConstantsCPU oc;
+        oc.Model        = transform;
+        oc.NormalMatrix = glm::mat4(glm::inverseTranspose(glm::mat3(transform)));
+        if (m_ObjectUBO) m_ObjectUBO->SetData(&oc, sizeof(oc));
 
         m_CommandBuffer->BindVertexBuffer(vertexBuffer);
         m_CommandBuffer->Draw(vertexCount);

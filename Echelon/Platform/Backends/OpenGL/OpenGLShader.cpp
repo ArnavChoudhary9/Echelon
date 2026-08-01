@@ -7,16 +7,13 @@
 namespace Echelon {
 
     OpenGLShader::OpenGLShader(const ShaderDesc& desc)
-        : m_Name(desc.DebugName)
+        : m_Name(desc.DebugName), m_Reflection(desc.Reflection)
     {
         m_Program = glCreateProgram();
 
         std::vector<GLuint> shaders;
         for (const auto& stage : desc.Stages) {
-            GLenum glStage = OpenGLUtils::ToGLShaderStage(stage.Stage);
-            GLuint shader  = CompileStage(glStage,
-                                          reinterpret_cast<const char*>(stage.Source.data()),
-                                          static_cast<uint32_t>(stage.Source.size()));
+            GLuint shader = CompileStage(stage);
             if (shader) {
                 glAttachShader(m_Program, shader);
                 shaders.push_back(shader);
@@ -31,7 +28,7 @@ namespace Echelon {
         if (!linked) {
             GLint len = 0;
             glGetProgramiv(m_Program, GL_INFO_LOG_LENGTH, &len);
-            std::vector<char> log(len);
+            std::vector<char> log(len > 0 ? len : 1);
             glGetProgramInfoLog(m_Program, len, &len, log.data());
             ECHELON_LOG_ERROR("Shader program link failure ({}): {}", m_Name, log.data());
         }
@@ -54,10 +51,38 @@ namespace Echelon {
         return m_Stages.count(stage) > 0;
     }
 
-    GLuint OpenGLShader::CompileStage(GLenum type, const char* source, uint32_t length)
+    GLuint OpenGLShader::CompileStage(const ShaderStageDesc& stage)
     {
-        GLuint shader = glCreateShader(type);
-        GLint len = static_cast<GLint>(length);
+        const GLenum glStage = OpenGLUtils::ToGLShaderStage(stage.Stage);
+        GLuint       shader  = glCreateShader(glStage);
+
+        if (stage.Format == ShaderSourceFormat::SPIRV) {
+            // ---- SPIR-V path (GL_ARB_gl_spirv) ----
+            glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V,
+                           stage.Source.data(),
+                           static_cast<GLsizei>(stage.Source.size()));
+
+            const char* entry = stage.EntryPoint.empty() ? "main" : stage.EntryPoint.c_str();
+            glSpecializeShader(shader, entry, 0, nullptr, nullptr);
+
+            GLint status = 0;
+            glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+            if (!status) {
+                GLint logLen = 0;
+                glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLen);
+                std::vector<char> log(logLen > 0 ? logLen : 1);
+                glGetShaderInfoLog(shader, logLen, &logLen, log.data());
+                ECHELON_LOG_ERROR("SPIR-V specialize failure ({}, entry '{}'): {}",
+                                  m_Name, entry, log.data());
+                glDeleteShader(shader);
+                return 0;
+            }
+            return shader;
+        }
+
+        // ---- GLSL text fallback ----
+        const char* source = reinterpret_cast<const char*>(stage.Source.data());
+        GLint       len    = static_cast<GLint>(stage.Source.size());
         glShaderSource(shader, 1, &source, &len);
         glCompileShader(shader);
 
@@ -66,45 +91,13 @@ namespace Echelon {
         if (!compiled) {
             GLint logLen = 0;
             glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLen);
-            std::vector<char> log(logLen);
+            std::vector<char> log(logLen > 0 ? logLen : 1);
             glGetShaderInfoLog(shader, logLen, &logLen, log.data());
-            ECHELON_LOG_ERROR("Shader compile failure: {}", log.data());
+            ECHELON_LOG_ERROR("Shader compile failure ({}): {}", m_Name, log.data());
             glDeleteShader(shader);
             return 0;
         }
         return shader;
-    }
-
-    // ---- Uniform helpers ----
-
-    void OpenGLShader::SetInt(const std::string& name, int value) const
-    {
-        GLint loc = glGetUniformLocation(m_Program, name.c_str());
-        glUniform1i(loc, value);
-    }
-
-    void OpenGLShader::SetFloat(const std::string& name, float value) const
-    {
-        GLint loc = glGetUniformLocation(m_Program, name.c_str());
-        glUniform1f(loc, value);
-    }
-
-    void OpenGLShader::SetVec3(const std::string& name, float x, float y, float z) const
-    {
-        GLint loc = glGetUniformLocation(m_Program, name.c_str());
-        glUniform3f(loc, x, y, z);
-    }
-
-    void OpenGLShader::SetVec4(const std::string& name, float x, float y, float z, float w) const
-    {
-        GLint loc = glGetUniformLocation(m_Program, name.c_str());
-        glUniform4f(loc, x, y, z, w);
-    }
-
-    void OpenGLShader::SetMat4(const std::string& name, const float* value) const
-    {
-        GLint loc = glGetUniformLocation(m_Program, name.c_str());
-        glUniformMatrix4fv(loc, 1, GL_FALSE, value);
     }
 
 } // namespace Echelon

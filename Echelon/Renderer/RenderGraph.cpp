@@ -5,6 +5,9 @@
 #include "GraphicsAPI/Pipeline.hpp"
 #include "Asset/AssetManager.hpp"
 #include "Asset/Mesh/Mesh.hpp"
+#include "Asset/Material/Material.hpp"
+#include "Asset/Material/MaterialInstance.hpp"
+#include "Renderer/RendererService.hpp"
 #include "Core/Log.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -95,6 +98,43 @@ namespace Echelon {
     // Rebuild — flatten scene graph into draw commands
     // ------------------------------------------------------------------
 
+    // Resolve a MaterialComponent's asset reference into a pipeline + descriptor set
+    // (once per epoch). Mirrors the mesh resolution: lazy, self-healing via source.
+    static void ResolveMaterial(MaterialComponent& mc, uint64_t epoch) {
+        if (mc.ResolveEpoch == epoch)
+            return;
+        mc.ResolveEpoch = epoch;
+
+        // Auto-fill: an empty material component adopts the built-in default
+        // material so every renderable is backed by a real material object.
+        if (mc.MaterialHandle.IsNull() && mc.MaterialSource.empty())
+            mc.MaterialSource = "DefaultMaterial";
+
+        auto& assets = AssetManager::Get();
+        UUID handle  = mc.MaterialHandle;
+        Ref<Material> material = handle.IsNull() ? nullptr : assets.GetAssetAs<Material>(handle);
+        if (!material && !mc.MaterialSource.empty()) {
+            handle = assets.GetHandle(mc.MaterialSource);
+            if (!handle.IsNull()) material = assets.GetAssetAs<Material>(handle);
+        }
+        if (!material)
+            return;
+
+        mc.MaterialHandle  = handle;
+        mc.RuntimeMaterial = material;
+        mc.PipelineRef     = material->GetPipeline();
+
+        // Sparse per-entity overrides form a runtime MaterialInstance.
+        if (!mc.Overrides.empty()) {
+            auto inst = CreateRef<MaterialInstance>(material);
+            for (const auto& [name, value] : mc.Overrides) inst->SetOverride(name, value);
+            inst->Build(Renderer::Get().GetActive());
+            mc.RuntimeInstance = inst;
+        } else {
+            mc.RuntimeInstance = nullptr;
+        }
+    }
+
     static glm::mat4 ComposeTransform(const TransformComponent& tc) {
         glm::mat4 t = glm::translate(glm::mat4(1.0f), tc.Position);
         glm::mat4 r = glm::toMat4(glm::quat(glm::radians(tc.Rotation)));
@@ -152,15 +192,13 @@ namespace Echelon {
             cmd.IndexCount   = mc.RuntimeMesh->GetIndexCount();
             cmd.Transform    = ComposeTransform(tc);
 
-            // Material data
+            // Material: resolve the asset reference → pipeline + per-entity set.
+            cmd.PipelineRef = defaultPipeline;
             if (registry->all_of<MaterialComponent>(entity)) {
-                const auto& mat = registry->get<MaterialComponent>(entity);
-                cmd.PipelineRef  = mat.PipelineRef ? mat.PipelineRef : defaultPipeline;
-                cmd.AlbedoColor  = mat.AlbedoColor;
-                cmd.Roughness    = mat.Roughness;
-                cmd.Metallic     = mat.Metallic;
-            } else {
-                cmd.PipelineRef = defaultPipeline;
+                auto& mat = registry->get<MaterialComponent>(entity);
+                ResolveMaterial(mat, AssetManager::Get().GetEpoch());
+                if (mat.PipelineRef) cmd.PipelineRef = mat.PipelineRef;
+                cmd.MaterialSet = mat.GetDescriptorSet();
             }
 
             // Build sort key: pipeline pointer (upper 32) | VB pointer (lower 32)
@@ -223,9 +261,9 @@ namespace Echelon {
                 currentIB = ibPtr;
             }
 
-            // Append instance data
+            // Append instance data (parallel arrays: transform + its material set)
             currentBatch->Transforms.push_back(cmd.Transform);
-            currentBatch->AlbedoColors.push_back(cmd.AlbedoColor);
+            currentBatch->MaterialSets.push_back(cmd.MaterialSet);
         }
     }
 

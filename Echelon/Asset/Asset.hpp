@@ -33,20 +33,26 @@ namespace Echelon {
     enum class AssetType : uint16_t {
         None = 0,
         Mesh,
-        Scene
+        Scene,
+        Shader,
+        Material
     };
 
     inline const char* AssetTypeToString(AssetType type) {
         switch (type) {
-            case AssetType::Mesh:  return "Mesh";
-            case AssetType::Scene: return "Scene";
-            default:               return "None";
+            case AssetType::Mesh:     return "Mesh";
+            case AssetType::Scene:    return "Scene";
+            case AssetType::Shader:   return "Shader";
+            case AssetType::Material: return "Material";
+            default:                  return "None";
         }
     }
 
     inline AssetType AssetTypeFromString(std::string_view s) {
-        if (s == "Mesh")  return AssetType::Mesh;
-        if (s == "Scene") return AssetType::Scene;
+        if (s == "Mesh")     return AssetType::Mesh;
+        if (s == "Scene")    return AssetType::Scene;
+        if (s == "Shader")   return AssetType::Shader;
+        if (s == "Material") return AssetType::Material;
         return AssetType::None;
     }
 

@@ -48,9 +48,13 @@ namespace Echelon {
         std::vector<uint32_t>   indices;
         vertices.reserve(attrib.vertices.size() / 3);
 
-        const size_t vertexFloats = attrib.vertices.size();
-        const size_t normalFloats = attrib.normals.size();
+        const size_t vertexFloats   = attrib.vertices.size();
+        const size_t normalFloats   = attrib.normals.size();
+        const size_t texcoordFloats = attrib.texcoords.size();
 
+        // Emit the single canonical vertex (Position/Normal/TexCoord) straight from the
+        // OBJ. No shader-specific special-casing — the pipeline maps its declared inputs
+        // onto this via reflection (see StandardVertex::FromReflection).
         for (const auto& shape : shapes) {
             for (const auto& idx : shape.mesh.indices) {
                 if (idx.vertex_index < 0) continue; // malformed face — skip defensively
@@ -65,20 +69,25 @@ namespace Echelon {
                     attrib.vertices[vbase + 2]
                 };
 
-                // The default "Flat" pipeline needs a per-vertex color. OBJs rarely
-                // carry one, so synthesize: from the normal if present, else from the
-                // normalized position (gives a pleasant gradient).
                 if (idx.normal_index >= 0 &&
                     static_cast<size_t>(idx.normal_index) * 3 + 2 < normalFloats) {
                     const size_t nbase = static_cast<size_t>(idx.normal_index) * 3;
-                    glm::vec3 n{ attrib.normals[nbase + 0],
+                    v.Normal = { attrib.normals[nbase + 0],
                                  attrib.normals[nbase + 1],
                                  attrib.normals[nbase + 2] };
-                    v.Color = n * 0.5f + 0.5f;
                 } else {
-                    float len = glm::length(v.Position);
-                    v.Color = (len > 0.0001f) ? (glm::normalize(v.Position) * 0.5f + 0.5f)
-                                              : glm::vec3(0.8f);
+                    // No normal in the file — a neutral default (lighting shaders can
+                    // recompute face normals later if needed).
+                    v.Normal = { 0.0f, 0.0f, 1.0f };
+                }
+
+                if (idx.texcoord_index >= 0 &&
+                    static_cast<size_t>(idx.texcoord_index) * 2 + 1 < texcoordFloats) {
+                    const size_t tbase = static_cast<size_t>(idx.texcoord_index) * 2;
+                    v.TexCoord = { attrib.texcoords[tbase + 0],
+                                   attrib.texcoords[tbase + 1] };
+                } else {
+                    v.TexCoord = { 0.0f, 0.0f };
                 }
 
                 indices.push_back(static_cast<uint32_t>(vertices.size()));

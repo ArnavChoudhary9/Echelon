@@ -33,6 +33,9 @@ public:
             m_Scene = CreateRef<Scene>("Editor Scene");
         }
 
+        auto* renderer = Renderer::Get().GetActive();
+        renderer->SetVSync(false); // disable VSync for editor overlay
+
         // ---- Populate a demo scene if it is empty ----
         // Only renderer-independent structure is created here: entities reference
         // meshes by source (a built-in name or an asset path). The AssetManager
@@ -65,9 +68,8 @@ public:
                 auto& mesh = cube.AddComponent<MeshComponent>();
                 mesh.MeshSource = "Cube"; // resolved to the built-in primitive
 
-                auto& mat = cube.AddComponent<MaterialComponent>();
-                mat.ShaderName  = "Flat";
-                mat.AlbedoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+                // No material asset → renders with the renderer's default (Flat) pipeline.
+                cube.AddComponent<MaterialComponent>();
             }
 
             // ---- OBJ-loaded monkey (exercises the .obj importer + registry) ----
@@ -80,9 +82,9 @@ public:
                 auto& mesh = obj.AddComponent<MeshComponent>();
                 mesh.MeshSource = "Meshs/Monkey.obj"; // resolved via the OBJ importer
 
+                // A Material asset (Basic shader) with a reflection-driven albedo param.
                 auto& mat = obj.AddComponent<MaterialComponent>();
-                mat.ShaderName  = "Flat";
-                mat.AlbedoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+                mat.MaterialSource = "Materials/Lit.ehmaterial";
             }
         }
     }

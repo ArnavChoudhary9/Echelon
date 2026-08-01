@@ -6,7 +6,8 @@
  */
 
 #include "Echelon/Core/Base.hpp"
-#include "Echelon/GraphicsAPI/GraphicsTypes.hpp"   // ShaderStage
+#include "Echelon/GraphicsAPI/GraphicsTypes.hpp"     // ShaderStage
+#include "Echelon/GraphicsAPI/ShaderReflection.hpp"  // ShaderReflection
 
 #include <cstdint>
 #include <string>
@@ -47,6 +48,7 @@ namespace Echelon {
     struct ShaderDesc
     {
         std::vector<ShaderStageDesc> Stages;
+        ShaderReflection             Reflection;   ///< Populated by the ShaderImporter (from Slang).
         std::string                  DebugName = "";
     };
 
@@ -78,6 +80,15 @@ namespace Echelon {
          * @return true if the shader contains the given stage.
          */
         virtual bool HasStage(ShaderStage stage) const = 0;
+
+        /**
+         * @brief Get the shader's reflection (vertex inputs, uniform buffers, samplers).
+         *
+         * Drives reflection-based pipeline construction (vertex layout) and the
+         * material system (parameter packing / resource binding).
+         * @return const ShaderReflection&
+         */
+        virtual const ShaderReflection& GetReflection() const = 0;
 
         // ---- Uniform setters ----
         // These allow renderers to set shader parameters without knowing

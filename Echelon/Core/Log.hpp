@@ -1,8 +1,10 @@
 #pragma once
 
-// #define ECHELON_DEBUG
+// Logging is active in Debug and Release builds.
+// In Dist builds (ECHELON_DIST) all macros become no-ops so the logger and
+// its spdlog dependency are compiled out entirely — zero overhead in shipped games.
+#ifndef ECHELON_DIST
 
-#ifdef ECHELON_DEBUG
     #include "Echelon/Logger/Logger.hpp"
     #include "Echelon/Core/Base.hpp"
 
@@ -11,9 +13,10 @@
         inline Ref<Logger> s_CoreLogger;
     }
 
-    #define INIT_ECHELON_LOGGER() ::Echelon::s_CoreLogger = ::Echelon::CreateRef<::Echelon::Logger>("ECHELON");\
-                                  ::Echelon::s_CoreLogger->AddSink(::Echelon::ConsoleSink);\
-                                  ::Echelon::s_CoreLogger->AddSink(::Echelon::FileSink("ECHELON.log"));
+    #define INIT_ECHELON_LOGGER() \
+        ::Echelon::s_CoreLogger = ::Echelon::CreateRef<::Echelon::Logger>("ECHELON"); \
+        ::Echelon::s_CoreLogger->AddSink(::Echelon::ConsoleSink); \
+        ::Echelon::s_CoreLogger->AddSink(::Echelon::FileSink("ECHELON.log"));
 
     // Release the core logger deterministically before the program exits.
     // s_CoreLogger is a global; if it were allowed to destruct during static
@@ -29,7 +32,8 @@
     #define ECHELON_LOG_ERROR(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Error(__VA_ARGS__); } while(0)
     #define ECHELON_LOG_FATAL(...) do { if (::Echelon::s_CoreLogger) ::Echelon::s_CoreLogger->Fatal(__VA_ARGS__); } while(0)
 
-#else
+#else // ECHELON_DIST — all logging compiled out
+
     #define INIT_ECHELON_LOGGER()
     #define SHUTDOWN_ECHELON_LOGGER()
     #define ECHELON_LOG_TRACE(...)
@@ -38,5 +42,5 @@
     #define ECHELON_LOG_WARN(...)
     #define ECHELON_LOG_ERROR(...)
     #define ECHELON_LOG_FATAL(...)
-    
-#endif
+
+#endif // ECHELON_DIST

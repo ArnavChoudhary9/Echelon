@@ -18,6 +18,8 @@
 #include "GraphicsAPI/Buffer.hpp"
 #include "Renderer/Camera.hpp"
 #include "Asset/Mesh/Mesh.hpp"
+#include "Asset/Material/Material.hpp"
+#include "Asset/Material/MaterialInstance.hpp"
 
 #include "glm/glm.hpp"
 #include "yaml-cpp/yaml.h"
@@ -409,62 +411,89 @@ namespace Echelon {
     // MaterialComponent
     // ==================================================================
     /**
-     * @brief Describes the visual material of an entity.
+     * @brief References a Material asset (+ optional sparse instance overrides).
      *
-     * Holds a reference to a Pipeline (defines the shader / render state)
-     * and per-instance parameters (colours, roughness, etc.).
+     * The material reference (handle + readable source) is serialized; the
+     * resolved GPU objects (base material, instance, pipeline) are transient and
+     * rebuilt at render time — mirroring MeshComponent. Overrides are sparse
+     * per-entity parameter values layered over the base material (they form a
+     * runtime MaterialInstance). An empty MaterialHandle falls back to the
+     * renderer's default pipeline.
      *
-     * The pipeline pointer is transient (not serialized).  The serializer
-     * persists the ShaderName tag so the application can reassign the
-     * correct pipeline on load.
-     *
-     * MaterialComponent carries a Version counter so the RenderGraph can
-     * detect when an entity switches pipeline (expensive) vs only changes
-     * uniform data within the same pipeline (cheap).
+     * A Version counter lets the RenderGraph detect changes cheaply (O(1)).
      */
     class MaterialComponent {
     public:
-        // ---- Pipeline (shader + render state) ----
-        Ref<Pipeline> PipelineRef = nullptr;     ///< GPU pipeline (transient)
-        std::string   ShaderName  = "Flat";      ///< Tag for serialization
+        // ---- Asset reference (serialized) ----
+        UUID        MaterialHandle = UUID::Null();  ///< Authoritative material asset reference.
+        std::string MaterialSource;                 ///< Readable hint: relative path.
 
-        // ---- Per-instance parameters ----
-        glm::vec4  AlbedoColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-        float      Roughness   = 0.5f;
-        float      Metallic    = 0.0f;
+        // ---- Sparse per-entity overrides (serialized) → runtime MaterialInstance ----
+        std::unordered_map<std::string, MaterialParam> Overrides;
 
-        /** Bumped on any material change.  Cheap dirty check. */
-        uint64_t   Version     = 0;
+        // ---- Transient (resolved by the RenderGraph) ----
+        Ref<Material>         RuntimeMaterial;               ///< Resolved base material.
+        Ref<MaterialInstance> RuntimeInstance;               ///< Built when Overrides is non-empty.
+        Ref<Pipeline>         PipelineRef = nullptr;         ///< Resolved pipeline (base material's).
+        uint64_t              ResolveEpoch = UINT64_MAX;      ///< AssetManager epoch at last resolve.
+        uint64_t              Version      = 0;               ///< Cheap dirty check.
 
         MaterialComponent() = default;
         MaterialComponent(const MaterialComponent&) = default;
         MaterialComponent& operator=(const MaterialComponent&) = default;
         ~MaterialComponent() = default;
 
-        /** Bump the version — call after changing pipeline or parameters. */
+        /** Bump the version — call after changing the material or overrides. */
         void Invalidate() { ++Version; }
 
-        /** Sort key: pointer identity of the pipeline, for batching. */
+        /** Sort key: pointer identity of the resolved pipeline, for batching. */
         uintptr_t GetPipelineSortKey() const {
             return reinterpret_cast<uintptr_t>(PipelineRef.get());
+        }
+
+        /** The descriptor set to bind for this entity (instance overrides → base → none). */
+        Ref<DescriptorSet> GetDescriptorSet() const {
+            if (RuntimeInstance) return RuntimeInstance->GetDescriptorSet();
+            return RuntimeMaterial ? RuntimeMaterial->GetDescriptorSet() : nullptr;
         }
 
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {
             out << YAML::Key << "MaterialComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "ShaderName"  << YAML::Value << ShaderName;
-            out << YAML::Key << "AlbedoColor" << YAML::Value << AlbedoColor;
-            out << YAML::Key << "Roughness"   << YAML::Value << Roughness;
-            out << YAML::Key << "Metallic"    << YAML::Value << Metallic;
+            out << YAML::Key << "MaterialHandle" << YAML::Value << MaterialHandle.ToString();
+            out << YAML::Key << "MaterialSource" << YAML::Value << MaterialSource;
+            if (!Overrides.empty()) {
+                out << YAML::Key << "Overrides" << YAML::Value << YAML::BeginMap;
+                for (const auto& [name, p] : Overrides) {
+                    const uint32_t floats = p.ByteSize() / 4;
+                    out << YAML::Key << name << YAML::Value << YAML::BeginMap;
+                    out << YAML::Key << "Type"  << YAML::Value << MaterialParamTypeToString(p.Type);
+                    out << YAML::Key << "Value" << YAML::Value << YAML::Flow << YAML::BeginSeq;
+                    for (uint32_t i = 0; i < floats; ++i) out << p.Data[i];
+                    out << YAML::EndSeq << YAML::EndMap;
+                }
+                out << YAML::EndMap;
+            }
             out << YAML::EndMap;
         }
 
         static MaterialComponent Deserialize(const YAML::Node& node) {
             MaterialComponent mc;
-            mc.ShaderName  = node["ShaderName"].as<std::string>("Flat");
-            mc.AlbedoColor = node["AlbedoColor"].as<glm::vec4>(glm::vec4(1.0f));
-            mc.Roughness   = node["Roughness"].as<float>(0.5f);
-            mc.Metallic    = node["Metallic"].as<float>(0.0f);
+            std::string handleStr = node["MaterialHandle"] ? node["MaterialHandle"].as<std::string>("") : "";
+            mc.MaterialHandle = handleStr.empty() ? UUID::Null() : UUID(handleStr);
+            mc.MaterialSource = node["MaterialSource"].as<std::string>("");
+            if (const YAML::Node ov = node["Overrides"]) {
+                for (const auto& kv : ov) {
+                    MaterialParam p;
+                    p.Type = MaterialParamTypeFromString(kv.second["Type"].as<std::string>("Float4"));
+                    const uint32_t floats = p.ByteSize() / 4;
+                    const YAML::Node vals = kv.second["Value"];
+                    if (vals && vals.IsSequence())
+                        for (uint32_t i = 0; i < floats && i < vals.size(); ++i)
+                            p.Data[i] = vals[i].as<float>(0.0f);
+                    mc.Overrides[kv.first.as<std::string>()] = p;
+                }
+            }
             return mc;
         }
     };

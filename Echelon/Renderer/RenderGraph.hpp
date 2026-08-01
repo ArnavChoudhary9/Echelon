@@ -38,6 +38,7 @@ namespace Echelon {
     // Forward declarations
     class Scene;
     class Pipeline;
+    class DescriptorSet;
 
     // ================================================================
     // A single draw command (one entity, fully resolved)
@@ -51,11 +52,11 @@ namespace Echelon {
         uint32_t     IndexCount   = 0;
         glm::mat4    Transform    = glm::mat4(1.0f);
 
-        // Material data (per-entity uniforms)
-        Ref<Pipeline> PipelineRef;
-        glm::vec4     AlbedoColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
-        float         Roughness    = 0.5f;
-        float         Metallic     = 0.0f;
+        // Material: the resolved pipeline + the per-entity parameter/texture set
+        // (from the material or its instance overrides). MaterialSet may be null
+        // (default pipeline / no material params).
+        Ref<Pipeline>      PipelineRef;
+        Ref<DescriptorSet> MaterialSet;
 
         // Sort key: pipeline pointer in upper 32 bits, mesh pointer (VB)
         // in lower 32 bits.  This sorts by pipeline first, then by mesh
@@ -73,9 +74,9 @@ namespace Echelon {
         uint32_t     VertexCount  = 0;
         uint32_t     IndexCount   = 0;
 
-        // Per-instance data
-        std::vector<glm::mat4> Transforms;
-        std::vector<glm::vec4> AlbedoColors;
+        // Per-instance data (parallel arrays: one entry per draw in this batch).
+        std::vector<glm::mat4>          Transforms;
+        std::vector<Ref<DescriptorSet>> MaterialSets;
     };
 
     // ================================================================
