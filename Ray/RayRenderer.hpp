@@ -81,8 +81,11 @@ namespace Echelon {
         /** @brief Load a shader asset and ensure its GPU program exists (renderer is not yet active during Init). */
         Ref<ShaderAsset> LoadShaderAsset(const std::string& name);
 
-        /** @brief Build the default (Flat) pipeline from the flat shader's reflection. */
+        /** @brief Build the default (Flat) + error (pink) pipelines from their shaders' reflection. */
         void BuildDefaultPipeline();
+
+        /** @brief The renderer's own fallback pipeline: used (pink) when a material fails to resolve. */
+        Ref<Pipeline> ErrorPipeline() const { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
 
         /** @brief Rebuild GPU resources if a shader/material was hot-reloaded (epoch bumped). */
         void EnsureUpToDate();
@@ -107,9 +110,11 @@ namespace Echelon {
         Ref<RenderPass>        m_DefaultRenderPass;
         Ref<Swapchain>         m_Swapchain;
 
-        // ---- Default shader asset & pipeline (reflection-driven) ----
+        // ---- Default + error shader assets & pipelines (reflection-driven) ----
         Ref<ShaderAsset> m_FlatShaderAsset;
         Ref<Pipeline>    m_FlatPipeline;
+        Ref<ShaderAsset> m_ErrorShaderAsset;  ///< pink "something wrong" shader
+        Ref<Pipeline>    m_ErrorPipeline;     ///< renderer's own fallback material
 
         // ---- System constant buffers (the fixed shader ABI: g_Frame / g_Object) ----
         Ref<Buffer>              m_FrameUBO;    ///< FrameConstants — written once per frame.

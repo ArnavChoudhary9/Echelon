@@ -91,15 +91,18 @@ namespace Echelon {
         colorAtt.Load   = LoadOp::Clear;
         colorAtt.Store  = StoreOp::Store;
         colorAtt.Clear  = { 0.1f, 0.1f, 0.12f, 1.0f };
+
         rpDesc.ColorAttachments.push_back(colorAtt);
 
         DepthAttachmentDesc depthAtt;
         depthAtt.Format = TextureFormat::D32_FLOAT;
         depthAtt.Load   = LoadOp::Clear;
         depthAtt.Store  = StoreOp::DontCare;
+
         rpDesc.DepthAttachment    = depthAtt;
         rpDesc.HasDepthAttachment = true;
         rpDesc.DebugName = "Ray_DefaultPass";
+
         m_DefaultRenderPass = m_Device->CreateRenderPass(rpDesc);
 
         SwapchainDesc swapDesc;
@@ -107,6 +110,7 @@ namespace Echelon {
         swapDesc.Height       = height;
         swapDesc.NativeWindow = windowHandle;
         swapDesc.VSync        = true;
+        
         m_Swapchain = m_Device->CreateSwapchain(swapDesc);
 
         CreateDefaultResources();
@@ -127,6 +131,8 @@ namespace Echelon {
         m_ObjectUBO         = nullptr;
         m_FlatPipeline      = nullptr;
         m_FlatShaderAsset   = nullptr;
+        m_ErrorPipeline     = nullptr;
+        m_ErrorShaderAsset  = nullptr;
         m_Swapchain         = nullptr;
         m_DefaultRenderPass = nullptr;
         m_CommandBuffer     = nullptr;
@@ -191,33 +197,35 @@ namespace Echelon {
         slDesc.DebugName = "Ray_SystemLayout";
         m_SystemLayout = m_Device->CreateDescriptorSetLayout(slDesc);
 
-        m_FlatShaderAsset = LoadShaderAsset("Flat.slang");
+        m_FlatShaderAsset  = LoadShaderAsset("Flat.slang");
+        m_ErrorShaderAsset = LoadShaderAsset("Error.slang");
         BuildDefaultPipeline();
 
         m_LastAssetEpoch = AssetManager::Get().GetEpoch();
     }
 
-    void RayRenderer::BuildDefaultPipeline() {
-        m_FlatPipeline = nullptr;
-        if (!m_FlatShaderAsset || !m_FlatShaderAsset->GetGpuShader()) {
-            ECHELON_LOG_ERROR("Ray: no flat shader — default pipeline not built");
-            return;
-        }
-
-        PipelineDesc pipeDesc;
-        pipeDesc.ShaderProgram = m_FlatShaderAsset->GetGpuShader();
-        pipeDesc.Topology      = PrimitiveTopology::TriangleList;
-        pipeDesc.Pass          = m_DefaultRenderPass;
-        pipeDesc.DebugName     = "Ray_FlatPipeline";
-
+    // Build one reflection-driven pipeline from a shader asset.
+    static Ref<Pipeline> BuildPipeline(const Ref<Device>& device, const Ref<RenderPass>& pass,
+                                       const Ref<ShaderAsset>& shader, const char* name) {
+        if (!shader || !shader->GetGpuShader()) return nullptr;
+        PipelineDesc pd;
+        pd.ShaderProgram = shader->GetGpuShader();
+        pd.Topology      = PrimitiveTopology::TriangleList;
+        pd.Pass          = pass;
+        pd.DebugName     = name;
         // Vertex layout comes entirely from reflection — no hand-written attributes.
-        pipeDesc.Layout = StandardVertex::FromReflection(m_FlatShaderAsset->GetReflection());
+        pd.Layout = StandardVertex::FromReflection(shader->GetReflection());
+        pd.Depth.DepthTestEnable  = true;
+        pd.Depth.DepthWriteEnable = true;
+        pd.Raster.Cull            = CullMode::None;
+        return device->CreatePipeline(pd);
+    }
 
-        pipeDesc.Depth.DepthTestEnable  = true;
-        pipeDesc.Depth.DepthWriteEnable = true;
-        pipeDesc.Raster.Cull            = CullMode::None;
-
-        m_FlatPipeline = m_Device->CreatePipeline(pipeDesc);
+    void RayRenderer::BuildDefaultPipeline() {
+        m_FlatPipeline  = BuildPipeline(m_Device, m_DefaultRenderPass, m_FlatShaderAsset,  "Ray_FlatPipeline");
+        m_ErrorPipeline = BuildPipeline(m_Device, m_DefaultRenderPass, m_ErrorShaderAsset, "Ray_ErrorPipeline");
+        if (!m_FlatPipeline)  ECHELON_LOG_ERROR("Ray: no flat shader — default pipeline not built");
+        if (!m_ErrorPipeline) ECHELON_LOG_ERROR("Ray: no error shader — pink fallback unavailable");
     }
 
     void RayRenderer::EnsureUpToDate() {
@@ -228,10 +236,9 @@ namespace Echelon {
         // A shader/material hot-reload (or renderer swap) rebuilt GPU programs; the
         // pipeline holds the *old* GL program, so rebuild it and drop stale sets.
         m_SystemSets.clear();
-        if (m_FlatShaderAsset) {
-            m_FlatShaderAsset->UploadGPU(this);   // rebuild the GL program if released
-            BuildDefaultPipeline();
-        }
+        if (m_FlatShaderAsset)  m_FlatShaderAsset->UploadGPU(this);   // rebuild GL program if released
+        if (m_ErrorShaderAsset) m_ErrorShaderAsset->UploadGPU(this);
+        BuildDefaultPipeline();
         m_LastAssetEpoch = epoch;
     }
 
@@ -318,10 +325,13 @@ namespace Echelon {
 
         EnsureUpToDate();
 
-        m_RenderGraph.Update(scene, m_FlatPipeline);
+        // The graph's fallback pipeline is the pink error material: entities whose
+        // material fails to resolve render magenta so the problem is obvious. Normal
+        // meshes get the engine default (Flat) material via the RenderGraph.
+        m_RenderGraph.Update(scene, ErrorPipeline());
 
         for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
-            const auto& pipeline = group.PipelineRef ? group.PipelineRef : m_FlatPipeline;
+            const auto& pipeline = group.PipelineRef ? group.PipelineRef : ErrorPipeline();
             if (!pipeline) continue;
 
             m_CommandBuffer->BindPipeline(pipeline);

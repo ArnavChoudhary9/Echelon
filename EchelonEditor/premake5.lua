@@ -60,7 +60,8 @@ project "EchelonEditor"
             -- Echelon.slang is the engine-owned shader constant system (import Echelon).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -81,7 +82,8 @@ project "EchelonEditor"
             -- Echelon.slang is the engine-owned shader constant system (import Echelon).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -98,7 +100,8 @@ project "EchelonEditor"
             -- Echelon.slang is the engine-owned shader constant system (import Echelon).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),

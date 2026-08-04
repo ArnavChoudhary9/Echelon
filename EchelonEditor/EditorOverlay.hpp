@@ -68,8 +68,11 @@ public:
                 auto& mesh = cube.AddComponent<MeshComponent>();
                 mesh.MeshSource = "Cube"; // resolved to the built-in primitive
 
-                // No material asset → renders with the renderer's default (Flat) pipeline.
-                cube.AddComponent<MaterialComponent>();
+                // Applying a material is the user's/renderer's responsibility — here we
+                // apply the engine's standard flat material. (Leaving it unset renders
+                // pink: the "no material applied" error signal.)
+                auto& mat = cube.AddComponent<MaterialComponent>();
+                mat.MaterialSource = "DefaultMaterial";
             }
 
             // ---- OBJ-loaded monkey (exercises the .obj importer + registry) ----

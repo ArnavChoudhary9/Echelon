@@ -100,15 +100,18 @@ namespace Echelon {
 
     // Resolve a MaterialComponent's asset reference into a pipeline + descriptor set
     // (once per epoch). Mirrors the mesh resolution: lazy, self-healing via source.
+    //
+    // The engine does NOT invent a material for meshes that have none — applying a
+    // standard or custom material to a loaded mesh is the renderer's/user's job. An
+    // unresolved material leaves PipelineRef null, so the renderer falls back to its
+    // pink error pipeline (a clear "no material applied / something is wrong" signal).
     static void ResolveMaterial(MaterialComponent& mc, uint64_t epoch) {
         if (mc.ResolveEpoch == epoch)
             return;
         mc.ResolveEpoch = epoch;
 
-        // Auto-fill: an empty material component adopts the built-in default
-        // material so every renderable is backed by a real material object.
         if (mc.MaterialHandle.IsNull() && mc.MaterialSource.empty())
-            mc.MaterialSource = "DefaultMaterial";
+            return; // no material applied → renderer's error/pink fallback
 
         auto& assets = AssetManager::Get();
         UUID handle  = mc.MaterialHandle;

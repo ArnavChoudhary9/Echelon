@@ -14,10 +14,7 @@ Entities:
     MeshComponent:
       MeshSource: Cube
     MaterialComponent:
-      ShaderName: Flat
-      AlbedoColor: [1, 1, 1, 1]
-      Roughness: 0.5
-      Metallic: 0
+      MaterialSource: DefaultMaterial
   - IDComponent:
       ID: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
     TagComponent:
