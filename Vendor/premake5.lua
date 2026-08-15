@@ -39,6 +39,10 @@ header_only_project("tinyobjloader", "tinyobjloader", {
     "tinyobjloader/**.cc",
 })
 
+header_only_project("stb", "stb", {
+    "stb/stb_image.h",
+})
+
 -- ============================================================
 -- yaml-cpp  (Compiled static library)
 -- ============================================================

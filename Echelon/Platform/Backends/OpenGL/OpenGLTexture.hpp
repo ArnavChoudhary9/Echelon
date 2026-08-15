@@ -1,7 +1,8 @@
 #pragma once
 
-// OpenGLSampler is defined in this header because it is a trivial no-op companion
-// to OpenGLTexture: GL uses per-texture glTexParameter* state, not sampler objects.
+// OpenGLSampler is defined in this header because it is a small companion to
+// OpenGLTexture: rather than a GL sampler object, it retains the requested
+// SamplerDesc and applies it as per-texture glTexParameter* state at bind time.
 
 /**
  * @file OpenGLTexture.hpp
@@ -15,16 +16,33 @@
 namespace Echelon {
 
     /**
-     * @brief OpenGL sampler — a no-op placeholder.
+     * @brief OpenGL sampler — retains a SamplerDesc and applies it as per-texture state.
      *
-     * OpenGL uses per-texture glTexParameter* state set during OpenGLTexture
-     * construction.  No GL sampler object is created or bound.  A Vulkan backend
-     * would replace this with a real VkSampler.
+     * OpenGL predating GL_ARB_sampler_objects (and the simplest portable path) drives
+     * filtering/addressing through glTexParameter* on the bound texture rather than a
+     * standalone sampler object. This class stores the requested state and applies it
+     * to whatever texture is bound at draw time (see Apply). A Vulkan backend would
+     * instead wrap a real VkSampler. Applying at bind time (not texture-creation time)
+     * lets the same texture be sampled through different samplers.
      */
     class OpenGLSampler : public Sampler {
     public:
-        explicit OpenGLSampler(const SamplerDesc& /*desc*/) {}
+        explicit OpenGLSampler(const SamplerDesc& desc) : m_Desc(desc) {}
         ~OpenGLSampler() override = default;
+
+        const SamplerDesc& GetDesc() const { return m_Desc; }
+
+        /**
+         * @brief Apply this sampler's state to the currently-bound texture.
+         * @param target GL texture target the texture is bound to (e.g. GL_TEXTURE_2D).
+         * @param hasMips Whether the texture has more than one mip level (selects the
+         *               mip-aware min filter). Textures without mips must not use a
+         *               *_MIPMAP_* min filter or they render as incomplete (black).
+         */
+        void Apply(GLenum target, bool hasMips) const;
+
+    private:
+        SamplerDesc m_Desc;
     };
 
     class OpenGLTexture : public Texture {

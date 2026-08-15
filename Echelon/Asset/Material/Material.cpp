@@ -1,7 +1,9 @@
 #include "Asset/Material/Material.hpp"
 #include "Asset/Mesh/StandardVertex.hpp"
+#include "Asset/Texture/TextureAsset.hpp"
 #include "Asset/AssetManager.hpp"
 #include "Core/Log.hpp"
+#include "Instrumentation/Instrumentation.hpp"
 
 namespace Echelon {
 
@@ -16,6 +18,28 @@ namespace Echelon {
         return shader;
     }
 
+    // Resolve a material's texture reference (sampler name → path) to a GPU texture.
+    // Returns nullptr on any miss so the caller falls back to the white texture.
+    // Uploads the texture asset (idempotent) so it is ready regardless of the order
+    // assets are rebuilt in on a renderer hot-swap.
+    static Ref<Texture> ResolveMaterialTexture(RendererAPI* renderer,
+                                               const std::string& samplerName,
+                                               const std::string& path) {
+        if (path.empty()) return nullptr;
+        auto& assets = AssetManager::Get();
+        UUID handle = assets.GetHandle(path);
+        if (handle.IsNull()) return nullptr;
+
+        auto texAsset = assets.GetAssetAs<TextureAsset>(handle);
+        if (!texAsset) {
+            ECHELON_LOG_WARN("[Material] Texture '{}' for sampler '{}' is not a texture asset.",
+                             path, samplerName);
+            return nullptr;
+        }
+        texAsset->UploadGPU(renderer);  // idempotent; guarantees readiness
+        return texAsset->GetGpuTexture();
+    }
+
     const MaterialParam* Material::Resolve(const std::string& name) const {
         auto it = Params.find(name);
         if (it != Params.end()) return &it->second;
@@ -24,6 +48,7 @@ namespace Echelon {
     }
 
     void Material::UploadGPU(RendererAPI* renderer) {
+        ECHELON_PROFILE_FUNCTION();
         if (!renderer) return;
         auto device = renderer->GetDevice();
         if (!device) return;
@@ -76,8 +101,21 @@ namespace Echelon {
             m_DefaultSampler = device->CreateSampler(sd);
         }
 
-        m_Resources = BuildMaterialResources(renderer, refl, m_DefaultTexture, m_DefaultSampler);
+        // Bind real texture assets to reflected samplers by name (falling back to
+        // the white texture for any sampler without a matching entry in Textures).
+        auto resolver = [this, renderer](const std::string& samplerName) -> Ref<Texture> {
+            auto it = Textures.find(samplerName);
+            if (it == Textures.end()) return nullptr;   // → white fallback
+            return ResolveMaterialTexture(renderer, samplerName, it->second);
+        };
+
+        m_Resources = BuildMaterialResources(renderer, refl, m_DefaultTexture,
+                                             m_DefaultSampler, resolver);
         Repack();
+
+        if (!Textures.empty())
+            ECHELON_LOG_DEBUG("[Material] '{}' bound {} texture(s) across {} reflected sampler(s).",
+                              ShaderSource, Textures.size(), refl.Samplers.size());
     }
 
     void Material::Repack() {

@@ -35,7 +35,8 @@ namespace Echelon {
         Mesh,
         Scene,
         Shader,
-        Material
+        Material,
+        Texture
     };
 
     inline const char* AssetTypeToString(AssetType type) {
@@ -44,6 +45,7 @@ namespace Echelon {
             case AssetType::Scene:    return "Scene";
             case AssetType::Shader:   return "Shader";
             case AssetType::Material: return "Material";
+            case AssetType::Texture:  return "Texture";
             default:                  return "None";
         }
     }
@@ -53,6 +55,7 @@ namespace Echelon {
         if (s == "Scene")    return AssetType::Scene;
         if (s == "Shader")   return AssetType::Shader;
         if (s == "Material") return AssetType::Material;
+        if (s == "Texture")  return AssetType::Texture;
         return AssetType::None;
     }
 

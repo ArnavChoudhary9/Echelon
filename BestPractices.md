@@ -8,19 +8,22 @@ This document outlines best practices for building and maintaining a **modular C
 
 ## Project Structure
 
-* **Root-level folders**
+* **Root-level folders** (as they exist in this repository)
 
   ```text
-  /Engine        → Core engine code (modules, systems)
-  /Sandbox       → Example app(s) using the engine
-  /Vendor        → Third-party dependencies (GLFW, ImGui, Lua/Python, etc.)
-  /Build         → Generated build files (ignored in git)
-  /Scripts       → Premake scripts, utility scripts
-  /Assets        → Test assets (textures, models, audio)
+  /Echelon        → Core engine code, built as a shared library (libEchelon.so)
+  /Ray            → Default renderer plugin (libRay.so), loaded at runtime
+  /EchelonEditor  → Editor application (the default startup project)
+  /DefaultProject → Example project + test assets (scenes, meshes, images)
+  /Vendor         → Third-party dependencies (GLFW, glad, glm, entt, slang, stb, …)
+  /bin, /bin-int  → Generated build output (ignored in git)
   ```
 
 * Keep **modules decoupled** (Graphics, Audio, Physics, Scripting, etc.).
-* Each module should be self-contained with its own include and source directories.
+* The renderer is a **runtime-loaded plugin** (dlopen) behind the `RendererAPI`
+  contract, so back-ends can be hot-swapped without rebuilding the engine.
+* The graphics HAL (`Echelon/GraphicsAPI/`) is back-end agnostic; concrete
+  back-ends live under `Echelon/Platform/Backends/<Backend>/`.
 
 ---
 
@@ -96,11 +99,13 @@ This document outlines best practices for building and maintaining a **modular C
 
 ## Coding Standards
 
-* Naming convention:
+* Naming convention (as used throughout this codebase):
 
-  * Classes: `PascalCase` (`Renderer`, `SceneGraph`)
-  * Methods: `camelCase` (`renderFrame()`, `dispatchEvent()`)
-  * Constants/macros: `ALL_CAPS`
+  * Types: `PascalCase` (`Renderer`, `SceneGraph`)
+  * Methods & functions: `PascalCase` (`BeginFrame()`, `DispatchEvent()`)
+  * Member variables: `m_PascalCase` (`m_Pipeline`); public POD fields on
+    plain component/descriptor structs may be bare `PascalCase` (`Position`)
+  * Constants/macros: `ALL_CAPS` (engine macros are prefixed `ECHELON_`)
 * Use namespaces for subsystems:
 
   ```cpp
@@ -149,8 +154,14 @@ This document outlines best practices for building and maintaining a **modular C
 
 ## Roadmap Reminder
 
-* **Phase 1**: Core loop, OpenGL, ImGui, Events, Logging, Scripting (Lua/Python).
-* Future: Vulkan, PBR, Physics, Audio, ECS, Render Graph.
+* **Done**: Core loop, Events, Logging, Instrumentation, OpenGL back-end,
+  entt-based ECS + scene graph, YAML scene serialization, UUID asset system with
+  hot-reload, Slang→SPIR-V shaders with reflection-driven materials, RenderGraph
+  (sort + batch), runtime-loaded renderer plugins, **textures (stb_image importer +
+  sampler binding)**.
+* **In progress / next**: lighting (Blinn-Phong → PBR), multipass render graph
+  (shadow maps, post-processing), editor UI panels (ImGui).
+* **Future**: Vulkan back-end, physics, audio, scripting.
 
 ---
 

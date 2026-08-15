@@ -3,10 +3,14 @@ Material:
   Params:
     AlbedoColor:
       Type: Float4
-      Value: [1.0, 0.55, 0.2, 1.0]
+      Value: [1.0, 1.0, 1.0, 1.0]
     Roughness:
       Type: Float
       Value: [0.4]
     Metallic:
       Type: Float
       Value: [0.0]
+  Textures:
+    # Reflected sampler name (u_AlbedoTex in Basic.slang) → texture asset path
+    # (relative to the project's Assets directory).
+    u_AlbedoTex: Images/1.jpg

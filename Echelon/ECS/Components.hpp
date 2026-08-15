@@ -129,10 +129,8 @@ namespace Echelon {
 
         ~IDComponent() = default;
 
-        IDComponent& Copy() {
-            auto copy = new IDComponent(*this);
-            return *copy;
-        }
+        /** @brief Return a value copy of this component. */
+        IDComponent Copy() const { return *this; }
 
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {
@@ -175,10 +173,8 @@ namespace Echelon {
 
         ~TransformComponent() = default;
 
-        TransformComponent& Copy() {
-            auto copy = new TransformComponent(*this);
-            return *copy;
-        }
+        /** @brief Return a value copy of this component. */
+        TransformComponent Copy() const { return *this; }
 
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {

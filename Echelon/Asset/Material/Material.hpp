@@ -32,7 +32,7 @@ namespace Echelon {
         UUID        ParentHandle = UUID::Null();  ///< Optional parent material (saved instance).
         std::string ParentSource;
         std::unordered_map<std::string, MaterialParam> Params;    ///< name → value (sparse).
-        std::unordered_map<std::string, std::string>   Textures;  ///< sampler name → texture path (future).
+        std::unordered_map<std::string, std::string>   Textures;  ///< reflected sampler name → texture asset path.
 
         Material() = default;
         ~Material() override = default;

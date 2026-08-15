@@ -16,6 +16,9 @@ Dep["glad"]          = { include = "%{wks.location}/Vendor/glad/include",  link 
 Dep["yaml"]          = { include = "%{wks.location}/Vendor/yaml/include",  link = "yaml-cpp" }
 Dep["uuid"]          = { include = "%{wks.location}/Vendor/uuid/include" }
 Dep["tinyobjloader"] = { include = "%{wks.location}/Vendor/tinyobjloader" }
+-- stb is header-only: STB_IMAGE_IMPLEMENTATION is defined in a single TU
+-- (TextureImporter.cpp), so there is no compiled lib to link — include only.
+Dep["stb"]           = { include = "%{wks.location}/Vendor/stb" }
 -- Slang is a *prebuilt* SDK: it is not compiled in Vendor/premake5.lua. It carries a
 -- 'libdir' (link-time search path for libslang.so) in addition to include/link.
 Dep["slang"]         = { include = "%{wks.location}/Vendor/slang/include",

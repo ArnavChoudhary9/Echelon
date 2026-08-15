@@ -44,6 +44,9 @@ namespace Echelon {
         return nullptr;
     }
 
+    /** @brief Resolve a reflected sampler name → a texture to bind (or nullptr to fall back). */
+    using TextureResolver = std::function<Ref<Texture>(const std::string& samplerName)>;
+
     /**
      * @brief Build the material's param UBO + descriptor set from a shader's reflection.
      *
@@ -51,14 +54,19 @@ namespace Echelon {
      * every reflected sampler binding.  Pass nullptr/nullptr for both fallback arguments
      * if the caller has no textures to bind (e.g. MaterialInstance override-only path).
      *
-     * @param fallbackTexture  1×1 white texture used when no real texture is set.
+     * @param fallbackTexture  1×1 white texture used when a sampler resolves to nothing.
      * @param fallbackSampler  Default sampler (LINEAR/REPEAT).  Required on Vulkan;
-     *                         ignored by the OpenGL backend.
+     *                         drives glTexParameter* state on the OpenGL backend.
+     * @param textureResolver  Optional: reflected sampler name → real texture. Called
+     *                         per reflected sampler; on null/empty result the binding
+     *                         falls back to @p fallbackTexture. Pass {} to bind only
+     *                         fallbacks (e.g. the MaterialInstance override-only path).
      */
     inline MaterialGpuResources BuildMaterialResources(RendererAPI* renderer,
                                                        const ShaderReflection& refl,
                                                        const Ref<Texture>& fallbackTexture,
-                                                       const Ref<Sampler>& fallbackSampler) {
+                                                       const Ref<Sampler>& fallbackSampler,
+                                                       const TextureResolver& textureResolver = {}) {
         MaterialGpuResources res;
         if (!renderer) return res;
         auto device = renderer->GetDevice();
@@ -94,8 +102,10 @@ namespace Echelon {
             res.Set->SetBuffer(res.Block->Binding, res.ParamUBO);
         }
         for (const auto& s : refl.Samplers) {
-            if (fallbackTexture && fallbackSampler)
-                res.Set->SetTexture(s.Binding, fallbackTexture, fallbackSampler);
+            Ref<Texture> tex = textureResolver ? textureResolver(s.Name) : nullptr;
+            if (!tex) tex = fallbackTexture;
+            if (tex && fallbackSampler)
+                res.Set->SetTexture(s.Binding, tex, fallbackSampler);
         }
         res.Set->Update();
         return res;

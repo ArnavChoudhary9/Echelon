@@ -1,6 +1,8 @@
 #include "OpenGLTexture.hpp"
 #include "OpenGLUtils.hpp"
 
+#include <algorithm>
+
 namespace Echelon {
 
     OpenGLTexture::OpenGLTexture(const TextureDesc& desc)
@@ -27,13 +29,44 @@ namespace Echelon {
             glTexStorage2D(m_GLTarget, m_MipLevels, internalFmt, m_Width, m_Height);
         }
 
-        // Default sampling parameters
+        // Default sampling parameters — a sane baseline used until a sampler is
+        // applied at bind time (OpenGLSampler::Apply overrides these per draw).
         glTexParameteri(m_GLTarget, GL_TEXTURE_MIN_FILTER, (m_MipLevels > 1) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
         glTexParameteri(m_GLTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(m_GLTarget, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(m_GLTarget, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
         glBindTexture(m_GLTarget, 0);
+    }
+
+    void OpenGLSampler::Apply(GLenum target, bool hasMips) const
+    {
+        // Min filter: only select a mip-aware mode when the texture actually has
+        // mips, else the texture samples as incomplete (renders black).
+        GLenum minFilter;
+        if (hasMips) {
+            const bool linearMin = m_Desc.MinFilter    == FilterMode::Linear;
+            const bool linearMip = m_Desc.MipMapFilter == FilterMode::Linear;
+            if (linearMin) minFilter = linearMip ? GL_LINEAR_MIPMAP_LINEAR  : GL_LINEAR_MIPMAP_NEAREST;
+            else           minFilter = linearMip ? GL_NEAREST_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST;
+        } else {
+            minFilter = OpenGLUtils::ToGLFilterMode(m_Desc.MinFilter);
+        }
+
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, minFilter);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, OpenGLUtils::ToGLFilterMode(m_Desc.MagFilter));
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, OpenGLUtils::ToGLAddressMode(m_Desc.AddressU));
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, OpenGLUtils::ToGLAddressMode(m_Desc.AddressV));
+        glTexParameteri(target, GL_TEXTURE_WRAP_R, OpenGLUtils::ToGLAddressMode(m_Desc.AddressW));
+
+        // Anisotropic filtering is core since GL 4.6 (also the ubiquitous
+        // EXT_texture_filter_anisotropic extension). Clamp to the driver max.
+        if (m_Desc.MaxAnisotropy > 1.0f) {
+            GLfloat maxSupported = 1.0f;
+            glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &maxSupported);
+            glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY,
+                            std::min(m_Desc.MaxAnisotropy, maxSupported));
+        }
     }
 
     OpenGLTexture::~OpenGLTexture()

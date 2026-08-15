@@ -20,6 +20,9 @@
 // ---- Shader ----
 #include "Asset/Shader/ShaderAsset.hpp"
 
+// ---- Texture ----
+#include "Asset/Texture/TextureAsset.hpp"
+
 // ---- Material ----
 #include "Asset/Material/MaterialParam.hpp"
 #include "Asset/Material/Material.hpp"
@@ -33,3 +36,4 @@
 #include "Asset/Importers/Scene/SceneImporter.hpp"
 #include "Asset/Importers/Shader/ShaderImporter.hpp"
 #include "Asset/Importers/Material/MaterialImporter.hpp"
+#include "Asset/Importers/Texture/TextureImporter.hpp"

@@ -29,11 +29,11 @@ namespace Echelon {
     }
 
     void OpenGLDescriptorSet::SetTexture(uint32_t binding, const Ref<Texture>& texture,
-                                          const Ref<Sampler>& /*sampler*/)
+                                          const Ref<Sampler>& sampler)
     {
-        // sampler is intentionally ignored: the GL path uses per-texture
-        // glTexParameter* state (set during OpenGLTexture construction).
-        m_Textures[binding] = texture;
+        // The GL path has no sampler objects: the sampler is retained and applied
+        // as per-texture glTexParameter* state at Bind() time (OpenGLSampler::Apply).
+        m_Textures[binding] = { texture, sampler };
     }
 
     void OpenGLDescriptorSet::Update()
@@ -59,13 +59,16 @@ namespace Echelon {
             }
         }
 
-        // Bind textures to texture units
-        for (const auto& [binding, tex] : m_Textures) {
-            auto glTex = std::static_pointer_cast<OpenGLTexture>(tex);
+        // Bind textures to texture units, then apply the paired sampler's state.
+        for (const auto& [binding, tb] : m_Textures) {
+            auto glTex = std::static_pointer_cast<OpenGLTexture>(tb.texture);
             if (!glTex) continue;
 
             glActiveTexture(GL_TEXTURE0 + binding);
             glBindTexture(glTex->GetGLTarget(), glTex->GetHandle());
+
+            if (auto glSampler = std::static_pointer_cast<OpenGLSampler>(tb.sampler))
+                glSampler->Apply(glTex->GetGLTarget(), glTex->GetMipLevels() > 1);
         }
     }
 

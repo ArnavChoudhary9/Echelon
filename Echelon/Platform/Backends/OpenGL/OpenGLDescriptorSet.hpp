@@ -49,9 +49,14 @@ namespace Echelon {
             uint64_t    range  = 0;
         };
 
-        Ref<OpenGLDescriptorSetLayout>              m_Layout;
+        struct TextureBinding {
+            Ref<Texture> texture;
+            Ref<Sampler> sampler;   ///< Applied as per-texture glTexParameter* state at Bind().
+        };
+
+        Ref<OpenGLDescriptorSetLayout>               m_Layout;
         std::unordered_map<uint32_t, BufferBinding>  m_Buffers;
-        std::unordered_map<uint32_t, Ref<Texture>>   m_Textures;
+        std::unordered_map<uint32_t, TextureBinding> m_Textures;
     };
 
 } // namespace Echelon

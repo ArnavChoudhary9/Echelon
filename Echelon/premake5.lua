@@ -73,7 +73,7 @@ project "Echelon"
     end
 
     includedirs { ".", "%{wks.location}" }
-    UseDeps("spdlog", "glm", "entt", "GLFW", "glad", "yaml", "uuid", "tinyobjloader", "slang")
+    UseDeps("spdlog", "glm", "entt", "GLFW", "glad", "yaml", "uuid", "tinyobjloader", "stb", "slang")
     LinkDeps("GLFW", "glad", "yaml", "slang")
 
     -- Slang is a prebuilt SDK: point the linker at its lib directory (libslang.so).

@@ -8,6 +8,7 @@
 #include "Asset/Importers/Scene/SceneImporter.hpp"
 #include "Asset/Importers/Shader/ShaderImporter.hpp"
 #include "Asset/Importers/Material/MaterialImporter.hpp"
+#include "Asset/Importers/Texture/TextureImporter.hpp"
 #include "Asset/Mesh/Mesh.hpp"
 #include "Asset/Mesh/Primitives.hpp"
 #include "Asset/Material/Material.hpp"
@@ -45,6 +46,7 @@ namespace Echelon {
         RegisterImporter(CreateRef<SceneImporter>());
         RegisterImporter(CreateRef<ShaderImporter>());
         RegisterImporter(CreateRef<MaterialImporter>());
+        RegisterImporter(CreateRef<TextureImporter>());
 
         // Procedural built-in shapes ("internal shape repository").
         RegisterPrimitive("Cube", []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
