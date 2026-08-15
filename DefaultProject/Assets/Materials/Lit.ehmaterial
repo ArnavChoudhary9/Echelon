@@ -1,5 +1,5 @@
 Material:
-  Shader: Shaders/Basic.slang
+  Shader: shader:Basic.slang
   Params:
     AlbedoColor:
       Type: Float4

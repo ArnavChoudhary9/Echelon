@@ -109,6 +109,23 @@ namespace Echelon {
     };
 
     // ================================================================
+    // Sampler interface
+    // ================================================================
+
+    /**
+     * @brief Abstract GPU sampler — controls how a texture is filtered and addressed.
+     *
+     * OpenGL uses per-texture glTexParameter* state; OpenGLSampler is a no-op
+     * placeholder that satisfies the interface.  A Vulkan backend wraps a VkSampler
+     * and passes it alongside the image view in VkDescriptorImageInfo.
+     */
+    class Sampler
+    {
+    public:
+        virtual ~Sampler() = default;
+    };
+
+    // ================================================================
     // Texture interface
     // ================================================================
 

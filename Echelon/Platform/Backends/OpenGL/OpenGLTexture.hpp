@@ -1,5 +1,8 @@
 #pragma once
 
+// OpenGLSampler is defined in this header because it is a trivial no-op companion
+// to OpenGLTexture: GL uses per-texture glTexParameter* state, not sampler objects.
+
 /**
  * @file OpenGLTexture.hpp
  * @brief OpenGL implementation of the Texture interface.
@@ -10,6 +13,19 @@
 #include <glad/gl.h>
 
 namespace Echelon {
+
+    /**
+     * @brief OpenGL sampler — a no-op placeholder.
+     *
+     * OpenGL uses per-texture glTexParameter* state set during OpenGLTexture
+     * construction.  No GL sampler object is created or bound.  A Vulkan backend
+     * would replace this with a real VkSampler.
+     */
+    class OpenGLSampler : public Sampler {
+    public:
+        explicit OpenGLSampler(const SamplerDesc& /*desc*/) {}
+        ~OpenGLSampler() override = default;
+    };
 
     class OpenGLTexture : public Texture {
     public:

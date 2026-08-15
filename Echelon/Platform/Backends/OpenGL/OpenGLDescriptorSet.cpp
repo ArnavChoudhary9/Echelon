@@ -28,8 +28,11 @@ namespace Echelon {
         m_Buffers[binding] = { buffer, offset, range };
     }
 
-    void OpenGLDescriptorSet::SetTexture(uint32_t binding, const Ref<Texture>& texture)
+    void OpenGLDescriptorSet::SetTexture(uint32_t binding, const Ref<Texture>& texture,
+                                          const Ref<Sampler>& /*sampler*/)
     {
+        // sampler is intentionally ignored: the GL path uses per-texture
+        // glTexParameter* state (set during OpenGLTexture construction).
         m_Textures[binding] = texture;
     }
 

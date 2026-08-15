@@ -62,6 +62,7 @@ namespace Echelon {
         Ref<Material>        m_Parent;
         Ref<Pipeline>        m_Pipeline;
         Ref<Texture>         m_DefaultTexture;
+        Ref<Sampler>         m_DefaultSampler;
         MaterialGpuResources m_Resources;
     };
 

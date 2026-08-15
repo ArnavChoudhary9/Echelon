@@ -1,13 +1,6 @@
 # To-Do
 
-- [x] Add `#define` for logging.
-- [x] Start work on documentation.
-- [x] Refactor Application class to require command line arguments and update related entry point and creation functions.
-- [x] Add more event types.
-- [x] Implement event dispatching system.
-- [x] Test if we require `ToString` method in Event derived class.
-- [x] Make Echelon and EchelonEditor separate projects for premake.
-- [x] Make layer->OnAttach() and layer->OnDetach() part of LayerStack.
 - [ ] Multiple renderers on compilation. (Currently only one renderer can be compiled at a time.)
-- [ ] mesh data must not be shader dependent.
+- [x] mesh data must not be shader dependent.
 - [ ] Custom Assets for building and compression.
+- [ ] Logger for Renderer.

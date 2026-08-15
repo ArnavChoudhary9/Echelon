@@ -46,12 +46,19 @@ namespace Echelon {
 
     /**
      * @brief Build the material's param UBO + descriptor set from a shader's reflection.
-     * Binds the param UBO at its reflected binding and a fallback texture at every
-     * reflected sampler binding. Returns empty resources if there is nothing to bind.
+     *
+     * Binds the param UBO at its reflected binding and a (texture, sampler) pair at
+     * every reflected sampler binding.  Pass nullptr/nullptr for both fallback arguments
+     * if the caller has no textures to bind (e.g. MaterialInstance override-only path).
+     *
+     * @param fallbackTexture  1×1 white texture used when no real texture is set.
+     * @param fallbackSampler  Default sampler (LINEAR/REPEAT).  Required on Vulkan;
+     *                         ignored by the OpenGL backend.
      */
     inline MaterialGpuResources BuildMaterialResources(RendererAPI* renderer,
                                                        const ShaderReflection& refl,
-                                                       const Ref<Texture>& fallbackTexture) {
+                                                       const Ref<Texture>& fallbackTexture,
+                                                       const Ref<Sampler>& fallbackSampler) {
         MaterialGpuResources res;
         if (!renderer) return res;
         auto device = renderer->GetDevice();
@@ -87,7 +94,8 @@ namespace Echelon {
             res.Set->SetBuffer(res.Block->Binding, res.ParamUBO);
         }
         for (const auto& s : refl.Samplers) {
-            if (fallbackTexture) res.Set->SetTexture(s.Binding, fallbackTexture);
+            if (fallbackTexture && fallbackSampler)
+                res.Set->SetTexture(s.Binding, fallbackTexture, fallbackSampler);
         }
         res.Set->Update();
         return res;

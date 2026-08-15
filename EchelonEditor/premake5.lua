@@ -56,12 +56,13 @@ project "EchelonEditor"
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/" .. defaultRenderer .. ".dll %{cfg.buildtarget.directory}"),
             -- NOTE: Windows requires its own vendored Slang binaries (slang.dll +
             -- slang-glslang.dll) copied here — the repo currently vendors Linux libs only.
-            -- Copy Slang shader source next to the executable so the renderer can find them.
-            -- Echelon.slang is the engine-owned shader constant system (import Echelon).
+            -- Copy Slang shaders next to the executable.
+            -- Echelon.slang is the engine-owned ABI contract (import Echelon).
+            -- Flat/Error/Basic are renderer-owned (Ray renderer).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -78,12 +79,13 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glslang-2026.14.1.so %{cfg.buildtarget.directory}",
             "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glsl-module-2026.14.1.so %{cfg.buildtarget.directory}",
             "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-rt.so.0.2026.14.1 %{cfg.buildtarget.directory}",
-            -- Copy Slang shader source next to the executable so the renderer can find them.
-            -- Echelon.slang is the engine-owned shader constant system (import Echelon).
+            -- Copy Slang shaders next to the executable.
+            -- Echelon.slang is the engine-owned ABI contract (import Echelon).
+            -- Flat/Error/Basic are renderer-owned (Ray renderer).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -96,12 +98,13 @@ project "EchelonEditor"
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".dylib %{cfg.buildtarget.directory}"),
             -- NOTE: macOS requires its own vendored Slang binaries (libslang.dylib +
             -- libslang-glslang.dylib) copied here — the repo currently vendors Linux libs only.
-            -- Copy Slang shader source next to the executable so the renderer can find them.
-            -- Echelon.slang is the engine-owned shader constant system (import Echelon).
+            -- Copy Slang shaders next to the executable.
+            -- Echelon.slang is the engine-owned ABI contract (import Echelon).
+            -- Flat/Error/Basic are renderer-owned (Ray renderer).
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Echelon/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),

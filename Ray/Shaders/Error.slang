@@ -1,6 +1,6 @@
 // Error.slang — the "something is wrong" shader. Renders solid magenta so a
 // missing/failed material or shader is immediately obvious in the viewport.
-// Engine-owned; a renderer builds its own fallback pipeline from it.
+// Renderer-owned; the engine uses the compiled pipeline via GetErrorPipeline().
 
 import Echelon;
 

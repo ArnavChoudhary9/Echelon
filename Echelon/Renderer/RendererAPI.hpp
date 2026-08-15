@@ -226,13 +226,27 @@ namespace Echelon {
         virtual Ref<Device> GetDevice() const = 0;
 
         /**
-         * @brief Get the renderer's default (flat colour) pipeline.
-         *
-         * Convenience accessor so simple geometry can be drawn without
-         * the caller creating a pipeline from scratch.
+         * @brief Get the renderer's default pipeline for meshes with no material.
          * @return Ref<Pipeline> or nullptr.
          */
         virtual Ref<Pipeline> GetDefaultPipeline() const = 0;
+
+        /**
+         * @brief Get the renderer's error pipeline — used when a material is
+         *        configured but fails to resolve (e.g. missing shader asset).
+         *        Typically renders a bright solid colour so the problem is obvious.
+         * @return Ref<Pipeline> or nullptr (may fall back to GetDefaultPipeline).
+         */
+        virtual Ref<Pipeline> GetErrorPipeline() const = 0;
+
+        /**
+         * @brief Filename of the renderer's default shader (e.g. "Flat.slang").
+         *
+         * The engine uses this to register the "DefaultMaterial" primitive without
+         * knowing the renderer's internal shader layout.  The file must be present
+         * in the standard shader search path next to the executable.
+         */
+        virtual const char* GetDefaultShaderName() const = 0;
 
         // ---- Queries ----
 

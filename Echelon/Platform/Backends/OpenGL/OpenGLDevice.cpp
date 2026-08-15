@@ -23,6 +23,11 @@ namespace Echelon {
         return CreateRef<OpenGLTexture>(desc);
     }
 
+    Ref<Sampler> OpenGLDevice::CreateSampler(const SamplerDesc& desc)
+    {
+        return CreateRef<OpenGLSampler>(desc);
+    }
+
     Ref<Shader> OpenGLDevice::CreateShader(const ShaderDesc& desc)
     {
         return CreateRef<OpenGLShader>(desc);

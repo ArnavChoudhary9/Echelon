@@ -61,6 +61,19 @@ namespace Echelon {
         virtual Ref<Texture> CreateTexture(const TextureDesc& desc) = 0;
 
         /**
+         * @brief Create a sampler (filter + address mode state).
+         *
+         * On OpenGL the returned object is a no-op placeholder — the GL path
+         * uses per-texture glTexParameter* state and does not bind sampler objects.
+         * On Vulkan this wraps a VkSampler and is required alongside a texture for
+         * any CombinedImageSampler binding.
+         *
+         * @param desc Sampler descriptor (see Texture.hpp).
+         * @return Ref<Sampler> Shared handle to the sampler.
+         */
+        virtual Ref<Sampler> CreateSampler(const SamplerDesc& desc) = 0;
+
+        /**
          * @brief Create a shader program from one or more compiled stages.
          * @param desc Shader descriptor (see Shader.hpp).
          * @return Ref<Shader> Shared handle to the created shader.

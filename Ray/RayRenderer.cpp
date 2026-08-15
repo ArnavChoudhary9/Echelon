@@ -12,6 +12,7 @@
 #include "Echelon/Asset/AssetManager.hpp"
 #include "Echelon/Asset/Mesh/StandardVertex.hpp"
 #include "Echelon/Renderer/RendererLoader.hpp"   // ExecutableDir()
+#include "Echelon/Renderer/RendererConstants.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtc/matrix_inverse.hpp"             // inverseTranspose
@@ -19,30 +20,6 @@
 #include <cstring>
 
 namespace Echelon {
-
-    // ------------------------------------------------------------------
-    // CPU mirrors of the shader constant system (Echelon.slang). Sizes must
-    // match the std140 layout Slang reflects (Frame = 224B, Object = 128B).
-    // ------------------------------------------------------------------
-    struct FrameConstantsCPU {
-        glm::mat4 View{ 1.0f };
-        glm::mat4 Projection{ 1.0f };
-        glm::mat4 ViewProjection{ 1.0f };
-        glm::vec4 CameraPosition{ 0.0f };
-        glm::vec4 TimeParams{ 0.0f };
-    };
-    struct ObjectConstantsCPU {
-        glm::mat4 Model{ 1.0f };
-        glm::mat4 NormalMatrix{ 1.0f };
-    };
-
-    // Find a reflected uniform buffer's binding by name. Returns false if absent.
-    static bool FindUBOBinding(const ShaderReflection& refl, const char* name, uint32_t& outBinding) {
-        for (const auto& ub : refl.UniformBuffers) {
-            if (ub.Name == name) { outBinding = ub.Binding; return true; }
-        }
-        return false;
-    }
 
     // ------------------------------------------------------------------
     // Construction / destruction
@@ -325,13 +302,10 @@ namespace Echelon {
 
         EnsureUpToDate();
 
-        // The graph's fallback pipeline is the pink error material: entities whose
-        // material fails to resolve render magenta so the problem is obvious. Normal
-        // meshes get the engine default (Flat) material via the RenderGraph.
-        m_RenderGraph.Update(scene, ErrorPipeline());
+        m_RenderGraph.Update(scene, GetDefaultPipeline(), GetErrorPipeline());
 
         for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
-            const auto& pipeline = group.PipelineRef ? group.PipelineRef : ErrorPipeline();
+            const auto& pipeline = group.PipelineRef ? group.PipelineRef : GetErrorPipeline();
             if (!pipeline) continue;
 
             m_CommandBuffer->BindPipeline(pipeline);
@@ -432,7 +406,7 @@ namespace Echelon {
     RendererInfo RayRenderer::GetInfo() const {
         return RendererInfo{
             .Name    = "Ray PBR Renderer",
-            .Version = "0.1.0",
+            .Version = "0.2.0",
             .Author  = "Echelon"
         };
     }

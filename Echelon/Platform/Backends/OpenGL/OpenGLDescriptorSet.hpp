@@ -35,7 +35,8 @@ namespace Echelon {
 
         void SetBuffer(uint32_t binding, const Ref<Buffer>& buffer,
                        uint64_t offset = 0, uint64_t range = 0) override;
-        void SetTexture(uint32_t binding, const Ref<Texture>& texture) override;
+        void SetTexture(uint32_t binding, const Ref<Texture>& texture,
+                        const Ref<Sampler>& sampler) override;
         void Update() override;
 
         /** @brief Apply all bindings to the current GL state. */

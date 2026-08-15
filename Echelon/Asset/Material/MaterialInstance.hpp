@@ -39,7 +39,7 @@ namespace Echelon {
             auto shader = m_Base->GetShaderAsset();
             if (!shader) return;
             m_Resources = BuildMaterialResources(renderer, shader->GetReflection(),
-                                                 /*fallbackTexture*/ nullptr);
+                                                 nullptr, nullptr);
             Repack();
         }
 

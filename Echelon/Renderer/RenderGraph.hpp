@@ -113,9 +113,12 @@ namespace Echelon {
          * integer comparison — O(1).
          *
          * @param scene           The active scene.
-         * @param defaultPipeline Fallback pipeline for entities without a MaterialComponent.
+         * @param defaultPipeline Pipeline used for entities that have no MaterialComponent.
+         * @param errorPipeline   Pipeline used when a material is configured but fails to resolve.
          */
-        void Update(const Ref<Scene>& scene, const Ref<Pipeline>& defaultPipeline);
+        void Update(const Ref<Scene>& scene,
+                    const Ref<Pipeline>& defaultPipeline,
+                    const Ref<Pipeline>& errorPipeline);
 
         /**
          * @brief Force a full rebuild on the next Update().
@@ -137,7 +140,9 @@ namespace Echelon {
         uint32_t GetRenderableCount() const { return static_cast<uint32_t>(m_DrawCommands.size()); }
 
     private:
-        void Rebuild(const Ref<Scene>& scene, const Ref<Pipeline>& defaultPipeline);
+        void Rebuild(const Ref<Scene>& scene,
+                     const Ref<Pipeline>& defaultPipeline,
+                     const Ref<Pipeline>& errorPipeline);
         void SortAndBatch();
         uint64_t ComputeSceneVersion(const Ref<Scene>& scene) const;
 

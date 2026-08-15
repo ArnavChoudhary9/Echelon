@@ -59,8 +59,8 @@ namespace Echelon {
         pd.DebugName     = "Material_Pipeline";
         m_Pipeline = device->CreatePipeline(pd);
 
-        // A 1x1 white fallback texture so shaders that sample a texture render even
-        // before real texture assets exist. (Texture-asset loading is future work.)
+        // 1×1 white fallback texture + default sampler so shaders that sample a texture
+        // render correctly before real texture assets are assigned.
         if (!m_DefaultTexture) {
             TextureDesc td;
             td.Width = 1; td.Height = 1;
@@ -71,8 +71,12 @@ namespace Echelon {
             const uint8_t white[4] = { 255, 255, 255, 255 };
             m_DefaultTexture->SetData(white, sizeof(white));
         }
+        if (!m_DefaultSampler) {
+            SamplerDesc sd;   // defaults: Linear, Repeat
+            m_DefaultSampler = device->CreateSampler(sd);
+        }
 
-        m_Resources = BuildMaterialResources(renderer, refl, m_DefaultTexture);
+        m_Resources = BuildMaterialResources(renderer, refl, m_DefaultTexture, m_DefaultSampler);
         Repack();
     }
 
@@ -82,9 +86,10 @@ namespace Echelon {
     }
 
     void Material::ReleaseGPU() {
-        m_Pipeline      = nullptr;
-        m_Resources     = {};
+        m_Pipeline       = nullptr;
+        m_Resources      = {};
         m_DefaultTexture = nullptr;
+        m_DefaultSampler = nullptr;
         // m_Shader/m_Parent are assets owned by the AssetManager — do not release here.
     }
 

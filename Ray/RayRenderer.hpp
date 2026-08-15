@@ -68,8 +68,10 @@ namespace Echelon {
         bool IsVSync() const override;
 
         // ---- Resource access ----
-        Ref<Device>   GetDevice() const override          { return m_Device; }
+        Ref<Device>   GetDevice()          const override { return m_Device; }
         Ref<Pipeline> GetDefaultPipeline() const override { return m_FlatPipeline; }
+        Ref<Pipeline> GetErrorPipeline()   const override { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
+        const char*   GetDefaultShaderName() const override { return "Flat.slang"; }
 
         // ---- Queries ----
         RendererInfo GetInfo() const override;
@@ -83,9 +85,6 @@ namespace Echelon {
 
         /** @brief Build the default (Flat) + error (pink) pipelines from their shaders' reflection. */
         void BuildDefaultPipeline();
-
-        /** @brief The renderer's own fallback pipeline: used (pink) when a material fails to resolve. */
-        Ref<Pipeline> ErrorPipeline() const { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
 
         /** @brief Rebuild GPU resources if a shader/material was hot-reloaded (epoch bumped). */
         void EnsureUpToDate();

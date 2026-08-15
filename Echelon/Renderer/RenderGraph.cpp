@@ -71,7 +71,9 @@ namespace Echelon {
     // Update — main entry point, called once per frame
     // ------------------------------------------------------------------
 
-    void RenderGraph::Update(const Ref<Scene>& scene, const Ref<Pipeline>& defaultPipeline) {
+    void RenderGraph::Update(const Ref<Scene>& scene,
+                              const Ref<Pipeline>& defaultPipeline,
+                              const Ref<Pipeline>& errorPipeline) {
         m_WasRebuilt = false;
 
         if (!scene) {
@@ -86,7 +88,7 @@ namespace Echelon {
             return; // Nothing changed — O(1) early-out
         }
 
-        Rebuild(scene, defaultPipeline);
+        Rebuild(scene, defaultPipeline, errorPipeline);
         SortAndBatch();
 
         m_LastSceneVersion = currentVersion;
@@ -145,7 +147,9 @@ namespace Echelon {
         return t * r * s;
     }
 
-    void RenderGraph::Rebuild(const Ref<Scene>& scene, const Ref<Pipeline>& defaultPipeline) {
+    void RenderGraph::Rebuild(const Ref<Scene>& scene,
+                               const Ref<Pipeline>& defaultPipeline,
+                               const Ref<Pipeline>& errorPipeline) {
         m_DrawCommands.clear();
 
         auto registry = scene->GetEntityRegistry().lock();
@@ -195,12 +199,17 @@ namespace Echelon {
             cmd.IndexCount   = mc.RuntimeMesh->GetIndexCount();
             cmd.Transform    = ComposeTransform(tc);
 
-            // Material: resolve the asset reference → pipeline + per-entity set.
+            // Material resolution:
+            //  - No MaterialComponent          → renderer's defaultPipeline (draw normally)
+            //  - MaterialComponent resolves     → use the material's own pipeline
+            //  - MaterialComponent fails        → renderer's errorPipeline (pink / obvious signal)
             cmd.PipelineRef = defaultPipeline;
             if (registry->all_of<MaterialComponent>(entity)) {
                 auto& mat = registry->get<MaterialComponent>(entity);
-                ResolveMaterial(mat, AssetManager::Get().GetEpoch());
-                if (mat.PipelineRef) cmd.PipelineRef = mat.PipelineRef;
+                if (!mat.MaterialHandle.IsNull() || !mat.MaterialSource.empty()) {
+                    ResolveMaterial(mat, AssetManager::Get().GetEpoch());
+                    cmd.PipelineRef = mat.PipelineRef ? mat.PipelineRef : errorPipeline;
+                }
                 cmd.MaterialSet = mat.GetDescriptorSet();
             }
 

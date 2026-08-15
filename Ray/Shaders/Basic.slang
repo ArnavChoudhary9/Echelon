@@ -15,8 +15,11 @@ struct MaterialParams
 };
 ConstantBuffer<MaterialParams> g_Material;
 
-Texture2D    u_AlbedoTex;
-SamplerState u_AlbedoSampler;
+// Combined texture+sampler (Sampler2D), NOT a separate Texture2D + SamplerState.
+// The engine's GL backend binds one combined image sampler per reflected sampler
+// (glBindTexture only — it never binds GL sampler objects), so a separate
+// SamplerState would sample black. See MaterialResources / OpenGLDescriptorSet.
+Sampler2D u_AlbedoTex;
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput vin)
@@ -37,7 +40,7 @@ float4 fragmentMain(VertexOutput fin) : SV_Target
     float3 L     = normalize(float3(0.4, 0.8, 0.6));
     float  ndl   = saturate(dot(n, L));
 
-    float4 tex   = u_AlbedoTex.Sample(u_AlbedoSampler, fin.TexCoord);
+    float4 tex   = u_AlbedoTex.Sample(fin.TexCoord);
     float3 albedo = g_Material.AlbedoColor.rgb * tex.rgb;
     float3 color  = albedo * (0.2 + 0.8 * ndl);
     return float4(color, g_Material.AlbedoColor.a);

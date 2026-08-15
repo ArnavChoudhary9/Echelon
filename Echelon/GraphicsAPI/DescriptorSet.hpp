@@ -18,6 +18,7 @@ namespace Echelon {
     // Forward declarations
     class Buffer;
     class Texture;
+    class Sampler;
 
     // ================================================================
     // Descriptor types
@@ -114,11 +115,18 @@ namespace Echelon {
                                uint64_t offset = 0, uint64_t range = 0) = 0;
 
         /**
-         * @brief Bind a texture to a descriptor binding point.
+         * @brief Bind a combined texture + sampler to a descriptor binding point.
+         *
+         * On OpenGL the sampler parameter is unused — the per-texture glTexParameter*
+         * state (set during texture creation) drives filtering.  On Vulkan the sampler
+         * is mandatory for writing a VkDescriptorImageInfo.
+         *
          * @param binding The binding index within the set.
          * @param texture The texture to bind.
+         * @param sampler Sampler describing filter / address state.
          */
-        virtual void SetTexture(uint32_t binding, const Ref<Texture>& texture) = 0;
+        virtual void SetTexture(uint32_t binding, const Ref<Texture>& texture,
+                                const Ref<Sampler>& sampler) = 0;
 
         /**
          * @brief Flush / update the descriptor set after changing bindings.

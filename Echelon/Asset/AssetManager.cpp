@@ -49,12 +49,13 @@ namespace Echelon {
         // Procedural built-in shapes ("internal shape repository").
         RegisterPrimitive("Cube", []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
 
-        // Built-in default material — used to auto-fill empty MaterialComponents so
-        // every renderable has a real material object (backed by the Flat shader,
-        // which ships next to the executable).
+        // Built-in default material — backed by whatever shader the active renderer
+        // declares as its default.  Resolved lazily so the renderer is guaranteed
+        // to be initialised before this lambda first runs.
         RegisterPrimitive("DefaultMaterial", []() -> Ref<Asset> {
             auto mat = CreateRef<Material>();
-            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Flat.slang").string();
+            if (auto* r = Renderer::Get().GetActive())
+                mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / r->GetDefaultShaderName()).string();
             return mat;
         });
 
@@ -159,7 +160,17 @@ namespace Echelon {
         if (pit != m_PrimitiveHandles.end())
             return pit->second;
 
-        // 2) Otherwise treat as a file path (relative to the project's Assets dir).
+        // 2) "shader:" prefix → renderer shader, resolved against <exe>/Shaders/.
+        //    Use this in material files to reference renderer-owned shaders without
+        //    coupling them to the project's Assets directory.
+        constexpr std::string_view kShaderPrefix = "shader:";
+        if (source.size() > kShaderPrefix.size() &&
+            source.compare(0, kShaderPrefix.size(), kShaderPrefix) == 0) {
+            return ImportAsset(fs::absolute(
+                RendererLoader::ExecutableDir() / "Shaders" / source.substr(kShaderPrefix.size())));
+        }
+
+        // 3) File path (relative → anchored to the project's Assets dir; absolute → as-is).
         fs::path path(source);
         if (!path.is_absolute()) {
             if (auto project = Project::GetActive())
