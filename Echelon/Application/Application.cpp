@@ -128,7 +128,6 @@ namespace Echelon {
     };
 
     void Application::OnEvent(Event& event) {
-        m_Logger.Trace("Event received: {}", event.ToString());
 
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<WindowCloseEvent>(EH_BIND_EVENT_FN(OnWindowClose));
