@@ -1,7 +1,9 @@
 // Tonemap.slang — cinematic post: composite bloom, apply a filmic (ACES) curve, and
 // encode linear→sRGB. Fullscreen pass. Input 0 = linear HDR scene, input 1 = bloom.
-// Now that the scene renders in LINEAR HDR (PBR), a real filmic curve + gamma is correct
-// (this replaces the old near-identity/adjustment passes).
+// Now that the scene renders in LINEAR HDR (PBR), a real filmic curve + gamma is correct.
+//
+// The fullscreen triangle is fed via a real vertex buffer (POSITION attribute), NOT
+// gl_VertexID — attributeless draws don't rasterize on some drivers (e.g. NVIDIA GL).
 
 Sampler2D u_Scene;   // input 0 — linear HDR
 Sampler2D u_Bloom;   // input 1 — bloom
@@ -13,12 +15,11 @@ struct FsOut
 };
 
 [shader("vertex")]
-FsOut vertexMain(uint id : SV_VertexID)
+FsOut vertexMain(float3 Position : POSITION)
 {
     FsOut o;
-    float2 uv = float2((id << 1) & 2, id & 2);
-    o.UV  = uv;
-    o.Pos = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+    o.Pos = float4(Position.xy, 0.0, 1.0);
+    o.UV  = Position.xy * 0.5 + 0.5;
     return o;
 }
 
@@ -37,6 +38,10 @@ float4 fragmentMain(FsOut fin) : SV_Target
 
     float3 hdr   = u_Scene.Sample(fin.UV).rgb;
     float3 bloom = u_Bloom.Sample(fin.UV).rgb;
+
+    // Guard against NaN/Inf in the bloom texture (robustness across drivers).
+    float bsum = bloom.x + bloom.y + bloom.z;
+    if (isnan(bsum) || isinf(bsum)) bloom = float3(0.0);
 
     float3 color = (hdr + bloom * bloomStrength) * exposure;
     color = ACESFilm(color);

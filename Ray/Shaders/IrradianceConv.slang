@@ -5,7 +5,7 @@ import IblCommon;
 SamplerCube g_EnvCube;
 
 [shader("vertex")]
-FsOut vertexMain(uint id : SV_VertexID) { return IblFullscreenVS(id); }
+FsOut vertexMain(float3 Position : POSITION) { return IblFullscreenVS(Position); }
 
 [shader("fragment")]
 float4 fragmentMain(FsOut fin) : SV_Target

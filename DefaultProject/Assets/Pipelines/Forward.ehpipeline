@@ -3,10 +3,9 @@ RenderPipeline:
     - { name: hdr,   format: RGBA16_FLOAT, size: swapchain }
     - { name: depth, format: D32_FLOAT,    size: swapchain }
     - { name: bloom, format: RGBA16_FLOAT, size: fixed, width: 640, height: 360 }
-    - { name: ldr,   format: RGBA8_UNORM,  size: swapchain }
   passes:
     # 1) Scene → offscreen HDR color (+ depth), 4x MSAA, auto-resolved to `hdr`.
-    #    PBR shading (shadows + IBL) writes LINEAR HDR here.
+    #    MSAA is the anti-aliasing (no separate FXAA pass). PBR writes LINEAR HDR.
     - name: forward
       type: graphics
       samples: 4
@@ -14,7 +13,7 @@ RenderPipeline:
         - { resource: hdr, load: clear, store: store, clear: [0.02, 0.03, 0.05, 1.0] }
       depth: { resource: depth, load: clear, store: dontcare }
 
-    # 2) Bloom — a PROJECT COMPUTE pass: bright-pass + blur of `hdr` into `bloom`.
+    # 2) Bloom — PROJECT COMPUTE pass: bright-pass + blur of `hdr` into `bloom`.
     - name: bloom
       type: compute
       shader: Shaders/Bloom.slang
@@ -23,21 +22,12 @@ RenderPipeline:
         - { resource: bloom, binding: 1, storage: true }
       groups: [80, 45, 1]   # 640/8 x 360/8 (fixed bloom resolution)
 
-    # 3) Tonemap — composite bloom + filmic ACES + linear→sRGB (built-in Tonemap.slang).
+    # 3) Tonemap — composite bloom + filmic ACES + linear→sRGB, straight to the backbuffer.
     - name: tonemap
       type: fullscreen
       shader: Tonemap.slang
       inputs:
         - { resource: hdr,   binding: 0 }
         - { resource: bloom, binding: 1 }
-      color:
-        - { resource: ldr, load: dontcare, store: store }
-
-    # 4) FXAA anti-aliasing → backbuffer.
-    - name: fxaa
-      type: fullscreen
-      shader: FXAA.slang
-      inputs:
-        - { resource: ldr, binding: 0 }
       color:
         - { resource: "$backbuffer", load: dontcare, store: store }

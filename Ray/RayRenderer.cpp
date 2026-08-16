@@ -157,6 +157,7 @@ namespace Echelon {
         m_FullscreenShaders.clear();
         m_FullscreenLayout  = nullptr;
         m_LinearSampler     = nullptr;
+        m_FullscreenVBO     = nullptr;
         m_PipelineAsset     = nullptr;
         m_SystemLayout      = nullptr;
         m_FrameUBO          = nullptr;
@@ -304,6 +305,26 @@ namespace Echelon {
         postSampler.AddressV     = AddressMode::ClampToEdge;
         postSampler.AddressW     = AddressMode::ClampToEdge;
         m_LinearSampler = m_Device->CreateSampler(postSampler);
+
+        // Fullscreen-triangle VBO. Position lives at MeshVertex offset 0 with the canonical
+        // 32-byte stride, so the reflection-driven pipeline layout (StandardVertex) binds it
+        // correctly. Fullscreen passes draw this instead of gl_VertexID — attributeless
+        // draws (empty VAO) don't rasterize on NVIDIA GL.
+        {
+            const float fsTri[] = {
+                // position            normal      uv
+                -1.0f, -1.0f, 0.0f,   0,0,0,     0.0f, 0.0f,
+                 3.0f, -1.0f, 0.0f,   0,0,0,     0.0f, 0.0f,
+                -1.0f,  3.0f, 0.0f,   0,0,0,     0.0f, 0.0f,
+            };
+            BufferDesc vb;
+            vb.Size      = sizeof(fsTri);
+            vb.Usage     = BufferUsage::VertexBuffer;
+            vb.Memory    = MemoryUsage::CPUToGPU;
+            vb.DebugName = "Ray_FullscreenVBO";
+            m_FullscreenVBO = m_Device->CreateBuffer(vb);
+            m_FullscreenVBO->SetData(fsTri, sizeof(fsTri));
+        }
 
         DescriptorSetLayoutDesc fsLayout;
         fsLayout.Bindings  = { { 0, DescriptorType::CombinedImageSampler, 1, ShaderStage::Fragment } };
@@ -704,6 +725,7 @@ namespace Echelon {
                 m_CommandBuffer->BeginRenderPass(iblCubePass, fbo);
                 m_CommandBuffer->BindPipeline(pipe);
                 bindGen(pipe, env);
+                m_CommandBuffer->BindVertexBuffer(m_FullscreenVBO);
                 m_CommandBuffer->Draw(3, 1, 0, 0);
                 m_CommandBuffer->EndRenderPass();
             }
@@ -733,6 +755,7 @@ namespace Echelon {
             m_CommandBuffer->SetViewport(vp);
             m_CommandBuffer->BeginRenderPass(iblLutPass, fbo);
             m_CommandBuffer->BindPipeline(lutPipe);
+            m_CommandBuffer->BindVertexBuffer(m_FullscreenVBO);
             m_CommandBuffer->Draw(3, 1, 0, 0);
             m_CommandBuffer->EndRenderPass();
         }
@@ -1090,7 +1113,8 @@ namespace Echelon {
             }
         }
 
-        cmd.Draw(3, 1, 0, 0);   // fullscreen triangle
+        cmd.BindVertexBuffer(m_FullscreenVBO);   // POSITION-attributed fullscreen triangle
+        cmd.Draw(3, 1, 0, 0);
     }
 
     // ------------------------------------------------------------------

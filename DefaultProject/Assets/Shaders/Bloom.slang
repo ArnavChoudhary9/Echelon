@@ -5,8 +5,10 @@
 // Bindings match the .ehpipeline pass inputs: hdr = sampled (binding 0), bloom = storage
 // image (binding 1). ExecuteComputePass binds each at its authored YAML binding.
 
-[[vk::binding(0, 0)]] Sampler2D           u_Hdr;
-[[vk::binding(1, 0)]] RWTexture2D<float4>  u_Bloom;
+[[vk::binding(0, 0)]] Sampler2D                                u_Hdr;
+// Explicit image format — NVIDIA's imageStore requires a format-qualified image
+// (a format-Unknown storage image is a silent no-op on strict drivers).
+[[vk::binding(1, 0)]] [[vk::image_format("rgba16f")]] RWTexture2D<float4> u_Bloom;
 
 static const float kThreshold = 1.05;   // bright-pass knee (HDR luminance)
 static const float kIntensity = 1.0;

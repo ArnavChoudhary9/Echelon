@@ -21,13 +21,13 @@ public struct FsOut
     public float2 UV  : TEXCOORD0;
 };
 
-// Fullscreen triangle from SV_VertexID (no vertex buffer). UV in [0,1].
-public FsOut IblFullscreenVS(uint id)
+// Fullscreen triangle fed via a real vertex buffer (POSITION attribute), NOT gl_VertexID
+// — attributeless draws don't rasterize on some drivers (e.g. NVIDIA GL). UV in [0,1].
+public FsOut IblFullscreenVS(float3 position)
 {
     FsOut o;
-    float2 uv = float2((id << 1) & 2, id & 2);
-    o.UV  = uv;
-    o.Pos = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+    o.Pos = float4(position.xy, 0.0, 1.0);
+    o.UV  = position.xy * 0.5 + 0.5;
     return o;
 }
 

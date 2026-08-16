@@ -14,12 +14,11 @@ struct VSOut
 };
 
 [shader("vertex")]
-VSOut vertexMain(uint vid : SV_VertexID)
+VSOut vertexMain(float3 Position : POSITION)
 {
     VSOut o;
-    float2 uv = float2((vid << 1) & 2, vid & 2);
-    o.UV       = uv;
-    o.Position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+    o.Position = float4(Position.xy, 0.0, 1.0);
+    o.UV       = Position.xy * 0.5 + 0.5;
     return o;
 }
 

@@ -220,6 +220,7 @@ namespace Echelon {
 
         // ---- Fullscreen / post-process passes ----
         Ref<Sampler>             m_LinearSampler;      ///< clamp+linear sampler for sampling attachments
+        Ref<Buffer>              m_FullscreenVBO;      ///< 3-vertex fullscreen triangle (POSITION); attributeless draws don't rasterize on NVIDIA
         Ref<DescriptorSetLayout> m_FullscreenLayout;   ///< generic sampled-texture layout (GL ignores contents)
         std::unordered_map<std::string, Ref<ShaderAsset>>   m_FullscreenShaders;   ///< by shader name (fullscreen + compute)
         std::unordered_map<std::string, Ref<Pipeline>>      m_FullscreenPipelines; ///< by pass name
