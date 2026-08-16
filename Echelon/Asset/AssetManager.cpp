@@ -63,6 +63,27 @@ namespace Echelon {
             return mat;
         });
 
+        // Widely-used built-in materials backed by the renderer's stock shaders
+        // (shipped next to the executable). Projects reference these by name
+        // (MaterialSource: "Albedo" / "Textured") or author .ehmaterial files that
+        // use `shader:Albedo.slang` / `shader:Textured.slang` with their own params.
+        RegisterPrimitive("Albedo", []() -> Ref<Asset> {
+            auto mat = CreateRef<Material>();
+            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Albedo.slang").string();
+            mat->Params["AlbedoColor"] = MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+            mat->Params["Roughness"]   = MaterialParam::Make(0.5f);
+            mat->Params["Metallic"]    = MaterialParam::Make(0.0f);
+            return mat;
+        });
+        RegisterPrimitive("Textured", []() -> Ref<Asset> {
+            auto mat = CreateRef<Material>();
+            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Textured.slang").string();
+            mat->Params["AlbedoColor"] = MaterialParam::Make(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+            mat->Params["Roughness"]   = MaterialParam::Make(0.5f);
+            mat->Params["Metallic"]    = MaterialParam::Make(0.0f);
+            return mat;   // no texture assigned → 1x1 white fallback until a project sets one
+        });
+
         // Rebuild GPU resources whenever the active renderer (back-end) changes.
         m_RendererListener = Renderer::Get().AddChangeListener(
             [this](RendererAPI* r) { OnRendererChanged(r); });

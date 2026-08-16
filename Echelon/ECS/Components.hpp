@@ -493,4 +493,55 @@ namespace Echelon {
             return mc;
         }
     };
+
+    // ==================================================================
+    // LightComponent
+    // ==================================================================
+    /** @brief Light source type. Directional ignores position; Point ignores facing. */
+    enum class LightType : uint32_t { Directional = 0, Point = 1, Spot = 2 };
+
+    /**
+     * @brief A light source. Direction/position come from the entity's
+     *        TransformComponent (Rotation → facing for directional/spot, Position
+     *        for point/spot). The renderer gathers all lights each frame into the
+     *        g_Lights system UBO (see Echelon.slang / RayRenderer::BeginScene).
+     */
+    class LightComponent {
+    public:
+        LightType Type      = LightType::Directional;
+        glm::vec3 Color     = glm::vec3(1.0f);
+        float     Intensity = 1.0f;
+        float     Range     = 10.0f;   // point / spot falloff distance
+        float     InnerCone = 0.90f;   // spot: cos(inner angle)
+        float     OuterCone = 0.80f;   // spot: cos(outer angle)
+
+        LightComponent() = default;
+        LightComponent(const LightComponent&) = default;
+        LightComponent& operator=(const LightComponent&) = default;
+        ~LightComponent() = default;
+
+        LightComponent Copy() const { return *this; }
+
+        void Serialize(YAML::Emitter& out) const {
+            out << YAML::Key << "LightComponent" << YAML::Value << YAML::BeginMap;
+            out << YAML::Key << "Type"      << YAML::Value << static_cast<uint32_t>(Type);
+            out << YAML::Key << "Color"     << YAML::Value << Color;
+            out << YAML::Key << "Intensity" << YAML::Value << Intensity;
+            out << YAML::Key << "Range"     << YAML::Value << Range;
+            out << YAML::Key << "InnerCone" << YAML::Value << InnerCone;
+            out << YAML::Key << "OuterCone" << YAML::Value << OuterCone;
+            out << YAML::EndMap;
+        }
+
+        static LightComponent Deserialize(const YAML::Node& node) {
+            LightComponent c;
+            c.Type      = static_cast<LightType>(node["Type"].as<uint32_t>(0u));
+            c.Color     = node["Color"].as<glm::vec3>(glm::vec3(1.0f));
+            c.Intensity = node["Intensity"].as<float>(1.0f);
+            c.Range     = node["Range"].as<float>(10.0f);
+            c.InnerCone = node["InnerCone"].as<float>(0.90f);
+            c.OuterCone = node["OuterCone"].as<float>(0.80f);
+            return c;
+        }
+    };
 }

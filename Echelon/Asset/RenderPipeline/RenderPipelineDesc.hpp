@@ -32,11 +32,19 @@ namespace Echelon {
 
     /**
      * @brief What kind of work a pass performs.
+     *
+     * Passes fall into two categories:
+     *  - **Render passes** rasterize into a framebuffer: `Graphics` (the scene draw
+     *    list) and `Fullscreen` (a single fullscreen triangle, for post-process).
+     *    These open a RenderPass + Framebuffer scope; `Samples > 1` makes them MSAA.
+     *  - **Compute passes** (`Compute`) run a compute shader with no framebuffer,
+     *    reading/writing framebuffer attachments as storage images (see PassInput
+     *    `AsStorageImage`) and dispatching. No render-pass scope, no MSAA.
      */
     enum class PassType : uint8_t {
-        Graphics = 0,   ///< Draws the scene draw-list into color/depth attachments.
-        Fullscreen,     ///< A single fullscreen triangle (post-process).
-        Compute         ///< A compute dispatch (no framebuffer).
+        Graphics = 0,   ///< Render pass: draws the scene draw-list into color/depth attachments.
+        Fullscreen,     ///< Render pass: a single fullscreen triangle (post-process).
+        Compute         ///< Compute pass: a compute dispatch operating on attachments (no framebuffer).
     };
 
     /**
@@ -92,6 +100,8 @@ namespace Echelon {
 
         std::vector<AttachmentRef>   ColorOutputs;   ///< color targets (may reference $backbuffer)
         std::optional<AttachmentRef> DepthOutput;    ///< optional depth/stencil target
+
+        uint32_t                     Samples = 1;    ///< MSAA sample count for render passes (>1 renders multisampled + auto-resolves)
 
         std::vector<PassInput>       Inputs;         ///< resources produced by earlier passes
 

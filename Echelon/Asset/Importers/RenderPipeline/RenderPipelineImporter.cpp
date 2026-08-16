@@ -124,6 +124,7 @@ namespace Echelon {
                     pd.Type    = ParseType(p["type"].as<std::string>("graphics"));
                     pd.Enabled = p["enabled"].as<bool>(true);
                     pd.Shader  = p["shader"].as<std::string>("");
+                    pd.Samples = p["samples"].as<uint32_t>(1u);
 
                     if (const YAML::Node cols = p["color"]) {
                         for (const auto& c : cols) pd.ColorOutputs.push_back(ParseColor(c));

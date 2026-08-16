@@ -140,9 +140,11 @@ namespace Echelon {
         Ref<ShaderAsset> m_ErrorShaderAsset;  ///< pink "something wrong" shader
         Ref<Pipeline>    m_ErrorPipeline;     ///< renderer's own fallback material
 
-        // ---- System constant buffers (the fixed shader ABI: g_Frame / g_Object) ----
+        // ---- System constant buffers (the fixed shader ABI: g_Frame / g_Object / g_Lights) ----
         Ref<Buffer>              m_FrameUBO;    ///< FrameConstants — written once per frame.
         Ref<Buffer>              m_ObjectUBO;   ///< ObjectConstants — rewritten per draw.
+        Ref<Buffer>              m_LightUBO;    ///< LightConstants — gathered once per scene (lighting scaffold).
+        int                      m_LastLightCount = -1;  ///< diagnostic: log when the gathered light count changes
         Ref<DescriptorSetLayout> m_SystemLayout;
 
         // One system descriptor set per shader — g_Frame/g_Object bindings are

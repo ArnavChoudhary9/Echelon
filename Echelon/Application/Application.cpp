@@ -240,10 +240,13 @@ namespace Echelon {
             m_Logger.Warn("Start scene '{}' is missing or unreadable; recreating it.",
                           startScene.string());
 
+        // Configure the start scene path up front so the in-memory scene adopts it
+        // (NewScene assigns m_CurrentScenePath from StartScene). Deliberately do NOT
+        // write the scene to disk here — an empty file is pointless and misleading;
+        // the scene is written on the first SaveScene (e.g. graceful shutdown) once it
+        // actually has content.
+        m_Project->GetConfig().StartScene = relativePath;
         m_Project->NewScene("Default Scene");
-        if (m_Project->SaveSceneAs(relativePath)) {
-            m_Project->GetConfig().StartScene = relativePath;
-            m_Project->Save();
-        }
+        m_Project->Save();   // persist the project config (StartScene)
     }
 }

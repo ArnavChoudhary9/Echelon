@@ -23,6 +23,8 @@ namespace Echelon {
     {
         auto glPass = std::static_pointer_cast<OpenGLRenderPass>(renderPass);
 
+        m_CurrentFramebuffer = framebuffer;   // tracked so EndRenderPass can resolve MSAA
+
         if (framebuffer) {
             auto glFB = std::static_pointer_cast<OpenGLFramebuffer>(framebuffer);
             glFB->Bind();
@@ -53,6 +55,12 @@ namespace Echelon {
 
     void OpenGLCommandBuffer::EndRenderPass()
     {
+        // Resolve MSAA render targets into their sampleable single-sample textures
+        // before unbinding, so later passes can read the resolved image.
+        if (m_CurrentFramebuffer && m_CurrentFramebuffer->IsMultisampled())
+            m_CurrentFramebuffer->Resolve();
+
+        m_CurrentFramebuffer = nullptr;
         OpenGLFramebuffer::Unbind();
     }
 

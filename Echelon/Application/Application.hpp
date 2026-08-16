@@ -121,6 +121,9 @@ namespace Echelon {
          */
         Ref<Project> GetProject() const { return m_Project; }
 
+        /** @brief Request a graceful shutdown; the run loop exits and layers detach cleanly. */
+        void Close() { m_Running = false; }
+
         // Event Handlers
         bool OnWindowClose(WindowCloseEvent&) { m_Running = false; return true; };
 

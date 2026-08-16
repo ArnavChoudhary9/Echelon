@@ -272,6 +272,7 @@ namespace Echelon {
                 fb.HasDepthAttachment = true;
             }
             fb.CompatiblePass = cp.Pass;
+            fb.Samples        = cp.Desc.Samples;   // >1 → MSAA render target, auto-resolved
             fb.DebugName      = "PassGraphFB_" + cp.Desc.Name;
 
             cp.FB = m_Device->CreateFramebuffer(fb);

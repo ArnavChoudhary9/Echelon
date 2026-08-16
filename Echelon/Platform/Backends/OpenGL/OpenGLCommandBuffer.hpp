@@ -64,6 +64,7 @@ namespace Echelon {
         GLenum m_CurrentTopology  = GL_TRIANGLES;
         GLenum m_CurrentIndexType = GL_UNSIGNED_INT;
         Ref<OpenGLPipeline> m_CurrentPipeline;
+        Ref<Framebuffer>    m_CurrentFramebuffer;   ///< tracked for MSAA resolve at EndRenderPass
     };
 
 } // namespace Echelon

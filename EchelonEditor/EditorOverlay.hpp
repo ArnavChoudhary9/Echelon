@@ -89,6 +89,17 @@ public:
                 auto& mat = obj.AddComponent<MaterialComponent>();
                 mat.MaterialSource = "Materials/Lit.ehmaterial";
             }
+
+            // ---- Directional light (lighting scaffold; gathered into g_Lights each
+            // frame. Current shaders ignore it — a future PBR shader consumes it). ----
+            {
+                Entity sun = m_Scene->AddEntity("Sun");
+                sun.GetComponent<TransformComponent>().Rotation = { -45.0f, -30.0f, 0.0f };
+                auto& light     = sun.AddComponent<LightComponent>();
+                light.Type      = LightType::Directional;
+                light.Color     = { 1.0f, 0.96f, 0.9f };
+                light.Intensity = 3.0f;
+            }
         }
     }
 

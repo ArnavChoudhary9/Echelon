@@ -26,7 +26,7 @@ namespace Echelon {
 
     /** @brief True for the engine-provided system constant buffers (not material params). */
     inline bool IsSystemUBO(const std::string& name) {
-        return name == "g_Frame" || name == "g_Object";
+        return name == "g_Frame" || name == "g_Object" || name == "g_Lights";
     }
 
     /** @brief GPU resources realizing a material's parameters for one shader. */

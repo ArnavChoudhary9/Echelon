@@ -151,8 +151,15 @@ namespace Echelon {
     // ------------------------------------------------------------------
     Ref<Scene> Project::NewScene(const std::string& name) {
         m_CurrentScene = CreateRef<Scene>(name);
-        m_CurrentScenePath.clear(); // No path yet until SaveSceneAs is called
-        ECHELON_LOG_INFO("[Project] Created new scene: {}", name);
+        // Give the new scene a path so SaveScene() can persist it immediately (it used
+        // to be left empty → SaveScene refused, so in-code scenes never saved). Prefer
+        // the configured StartScene — this recreates a missing start scene so it reloads
+        // next launch — otherwise derive a file from the scene name.
+        if (!m_Config.StartScene.empty())
+            m_CurrentScenePath = m_Config.ScenesDirectory / m_Config.StartScene;
+        else
+            m_CurrentScenePath = m_Config.ScenesDirectory / (name + ".ehscene");
+        ECHELON_LOG_INFO("[Project] Created new scene: {} -> {}", name, m_CurrentScenePath.string());
         return m_CurrentScene;
     }
 
@@ -205,8 +212,11 @@ namespace Echelon {
         }
 
         if (m_CurrentScenePath.empty()) {
-            ECHELON_LOG_ERROR("[Project] Current scene has no path. Use SaveSceneAs() instead.");
-            return false;
+            // Fall back to a name-derived path rather than refusing to save, so a
+            // scene created in code (NewScene) still persists.
+            m_CurrentScenePath = m_Config.ScenesDirectory / (m_CurrentScene->GetName() + ".ehscene");
+            ECHELON_LOG_WARN("[Project] Current scene had no path; defaulting to {}",
+                             m_CurrentScenePath.string());
         }
 
         // The scene directory may have been removed while the editor was running

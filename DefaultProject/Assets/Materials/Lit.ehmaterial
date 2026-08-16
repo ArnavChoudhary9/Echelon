@@ -1,5 +1,6 @@
 Material:
-  Shader: shader:Basic.slang
+  # Built-in RENDERER shader (widely used), textured + lit.
+  Shader: shader:Textured.slang
   Params:
     AlbedoColor:
       Type: Float4

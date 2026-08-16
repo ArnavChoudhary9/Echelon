@@ -30,6 +30,23 @@ namespace Echelon {
         glm::mat4 NormalMatrix{ 1.0f };
     };
 
+    // ---- Lighting scaffold: CPU mirror of Echelon.slang's g_Lights (std140). ----
+    // Keep ECHELON_MAX_LIGHTS in sync with ECH_MAX_LIGHTS in Echelon.slang.
+    constexpr int ECHELON_MAX_LIGHTS = 16;
+
+    struct GpuLightCPU {
+        glm::vec4 Position{ 0.0f };     // xyz world pos; w = type
+        glm::vec4 Direction{ 0.0f, -1.0f, 0.0f, 10.0f }; // xyz dir; w = range
+        glm::vec4 Color{ 1.0f };        // rgb; w = intensity
+        glm::vec4 SpotParams{ 0.9f, 0.8f, 0.0f, 0.0f };  // inner/outer cos
+    };
+
+    struct LightConstantsCPU {
+        glm::vec4   Ambient{ 0.03f, 0.03f, 0.03f, 1.0f };
+        glm::ivec4  Count{ 0 };         // x = active light count
+        GpuLightCPU Lights[ECHELON_MAX_LIGHTS];
+    };
+
     // Returns true and sets outBinding if the reflection contains a UBO named 'name'.
     inline bool FindUBOBinding(const ShaderReflection& refl, const char* name, uint32_t& outBinding) {
         for (const auto& ub : refl.UniformBuffers) {

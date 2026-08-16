@@ -1,5 +1,6 @@
 Material:
-  Shader: shader:Basic.slang
+  # Built-in RENDERER shader (widely used), flat albedo + lit.
+  Shader: shader:Albedo.slang
   Params:
     AlbedoColor:
       Type: Float4

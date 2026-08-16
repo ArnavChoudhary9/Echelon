@@ -53,6 +53,11 @@ namespace Echelon {
             entity.GetComponent<MaterialComponent>().Serialize(out);
         }
 
+        // LightComponent
+        if (entity.HasComponent<LightComponent>()) {
+            entity.GetComponent<LightComponent>().Serialize(out);
+        }
+
         out << YAML::EndMap; // Entity
     }
 
@@ -165,6 +170,12 @@ namespace Echelon {
             if (entityNode["MaterialComponent"]) {
                 auto mc = MaterialComponent::Deserialize(entityNode["MaterialComponent"]);
                 entity.AddComponent<MaterialComponent>(mc);
+            }
+
+            // LightComponent
+            if (entityNode["LightComponent"]) {
+                auto lc = LightComponent::Deserialize(entityNode["LightComponent"]);
+                entity.AddComponent<LightComponent>(lc);
             }
         }
 

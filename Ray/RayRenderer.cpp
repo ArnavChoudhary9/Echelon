@@ -13,6 +13,8 @@
 #include "Echelon/Asset/Mesh/StandardVertex.hpp"
 #include "Echelon/Asset/RenderPipeline/RenderPipelineAsset.hpp"
 #include "Echelon/Project/Project.hpp"
+#include "Echelon/Scene/Scene.hpp"
+#include "Echelon/ECS/Components.hpp"
 #include "Echelon/Renderer/RendererLoader.hpp"   // ExecutableDir()
 #include "Echelon/Renderer/RendererConstants.hpp"
 
@@ -156,6 +158,7 @@ namespace Echelon {
         m_SystemLayout      = nullptr;
         m_FrameUBO          = nullptr;
         m_ObjectUBO         = nullptr;
+        m_LightUBO          = nullptr;
         m_FlatPipeline      = nullptr;
         m_FlatShaderAsset   = nullptr;
         m_ErrorPipeline     = nullptr;
@@ -174,19 +177,30 @@ namespace Echelon {
     // ------------------------------------------------------------------
 
     Ref<ShaderAsset> RayRenderer::LoadShaderAsset(const std::string& name) {
-        // Engine/renderer shaders ship next to the executable in Shaders/.
-        const fs::path path = RendererLoader::ExecutableDir() / "Shaders" / name;
-
         auto& assets = AssetManager::Get();
-        UUID handle  = assets.GetHandle(path.string());
+
+        // Resolve a shader that a material or `.ehpipeline` pass references. Order:
+        //  - built-in engine/renderer shaders ship next to the executable (bare names
+        //    like "Flat.slang" / "Tonemap.slang");
+        //  - otherwise a PROJECT shader — an explicit "shader:" handle, or a path
+        //    resolved against the active project's Assets dir (custom project shaders).
+        // The ShaderImporter already puts <exe>/Shaders on Slang's search path, so a
+        // project shader can still `import Echelon`.
+        UUID handle;
+        const fs::path builtin = RendererLoader::ExecutableDir() / "Shaders" / name;
+        if (name.rfind("shader:", 0) != 0 && fs::exists(builtin))
+            handle = assets.GetHandle(builtin.string());   // built-in beside the exe
+        else
+            handle = assets.GetHandle(name);               // project-relative or "shader:" handle
+
         if (handle.IsNull()) {
-            ECHELON_LOG_ERROR("Ray: could not resolve shader '{}'", path.string());
+            ECHELON_LOG_ERROR("Ray: could not resolve shader '{}'", name);
             return nullptr;
         }
 
         auto shader = assets.GetAssetAs<ShaderAsset>(handle);
         if (!shader) {
-            ECHELON_LOG_ERROR("Ray: '{}' is not a ShaderAsset", path.string());
+            ECHELON_LOG_ERROR("Ray: '{}' is not a ShaderAsset", name);
             return nullptr;
         }
 
@@ -213,12 +227,20 @@ namespace Echelon {
         objDesc.DebugName = "Ray_ObjectUBO";
         m_ObjectUBO = m_Device->CreateBuffer(objDesc);
 
-        // A generic 2-binding layout (GL ignores layout at bind time; buffers are
+        BufferDesc lightDesc;
+        lightDesc.Size      = sizeof(LightConstantsCPU);
+        lightDesc.Usage     = BufferUsage::UniformBuffer;
+        lightDesc.Memory    = MemoryUsage::CPUToGPU;
+        lightDesc.DebugName = "Ray_LightUBO";
+        m_LightUBO = m_Device->CreateBuffer(lightDesc);
+
+        // A generic 3-binding layout (GL ignores layout at bind time; buffers are
         // assigned to the per-shader reflected bindings in BindSystemConstants).
         DescriptorSetLayoutDesc slDesc;
         slDesc.Bindings = {
             { 0, DescriptorType::UniformBuffer, 1, ShaderStage::Vertex },
             { 1, DescriptorType::UniformBuffer, 1, ShaderStage::Vertex },
+            { 2, DescriptorType::UniformBuffer, 1, ShaderStage::Fragment },  // g_Lights
         };
         slDesc.DebugName = "Ray_SystemLayout";
         m_SystemLayout = m_Device->CreateDescriptorSetLayout(slDesc);
@@ -351,6 +373,7 @@ namespace Echelon {
             uint32_t binding = 0;
             if (FindUBOBinding(refl, "g_Frame", binding))  set->SetBuffer(binding, m_FrameUBO);
             if (FindUBOBinding(refl, "g_Object", binding)) set->SetBuffer(binding, m_ObjectUBO);
+            if (FindUBOBinding(refl, "g_Lights", binding)) set->SetBuffer(binding, m_LightUBO); // lighting scaffold — bound only where present
             set->Update();
 
             it = m_SystemSets.emplace(shader.get(), set).first;
@@ -399,7 +422,48 @@ namespace Echelon {
     // Scene scope
     // ------------------------------------------------------------------
 
-    void RayRenderer::BeginScene(const Ref<Scene>& /*scene*/) {}
+    // Gather scene lights into the g_Lights UBO (lighting scaffold). Existing shaders
+    // ignore g_Lights; a future PBR shader consumes it. Direction/position come from
+    // each light entity's TransformComponent.
+    void RayRenderer::BeginScene(const Ref<Scene>& scene) {
+        if (!scene || !m_LightUBO) return;
+
+        LightConstantsCPU lc;
+        lc.Ambient = glm::vec4(0.03f, 0.03f, 0.03f, 1.0f);
+
+        if (auto registry = scene->GetEntityRegistry().lock()) {
+            int count = 0;
+            auto view = registry->view<LightComponent, TransformComponent>();
+            for (auto entity : view) {
+                if (count >= ECHELON_MAX_LIGHTS) break;
+                const auto& light = view.get<LightComponent>(entity);
+                const auto& tc    = view.get<TransformComponent>(entity);
+
+                // Rotation (euler radians) → forward direction; default facing -Z.
+                const glm::vec3 euler = glm::radians(tc.Rotation);
+                glm::vec3 dir = glm::normalize(glm::vec3(
+                    -glm::sin(euler.y) * glm::cos(euler.x),
+                     glm::sin(euler.x),
+                    -glm::cos(euler.y) * glm::cos(euler.x)));
+
+                GpuLightCPU& g = lc.Lights[count];
+                g.Position   = glm::vec4(tc.Position, static_cast<float>(light.Type));
+                g.Direction  = glm::vec4(dir, light.Range);
+                g.Color      = glm::vec4(light.Color, light.Intensity);
+                g.SpotParams = glm::vec4(light.InnerCone, light.OuterCone, 0.0f, 0.0f);
+                ++count;
+            }
+            lc.Count.x = count;
+        }
+
+        if (lc.Count.x != m_LastLightCount) {
+            m_LastLightCount = lc.Count.x;
+            ECHELON_LOG_INFO("Ray: gathered {} light(s) into g_Lights", lc.Count.x);
+        }
+
+        m_LightUBO->SetData(&lc, sizeof(lc));
+    }
+
     void RayRenderer::EndScene() {}
 
     // ------------------------------------------------------------------

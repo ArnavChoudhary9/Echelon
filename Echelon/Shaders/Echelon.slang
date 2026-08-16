@@ -47,6 +47,30 @@ public struct ObjectConstants
 public ConstantBuffer<FrameConstants>  g_Frame;
 public ConstantBuffer<ObjectConstants> g_Object;
 
+// ---- Always available: scene lights (bound once per scene) ----
+// Scaffold for lighting/PBR: the renderer gathers LightComponents into this block
+// and resolves it by name (like g_Frame/g_Object). Shaders that don't reference
+// g_Lights are unaffected (Slang strips the unused block). A future PBR shader
+// simply reads g_Lights.Lights[0..Count.x].
+public static const int ECH_MAX_LIGHTS = 16;
+
+public struct GpuLight
+{
+    public float4 Position;    // xyz = world position (point/spot); w = type (0=dir,1=point,2=spot)
+    public float4 Direction;   // xyz = direction (dir/spot);        w = range (point/spot)
+    public float4 Color;       // rgb = color;                       w = intensity
+    public float4 SpotParams;  // x = cos(inner), y = cos(outer);    zw reserved
+};
+
+public struct LightConstants
+{
+    public float4   Ambient;                     // rgb = ambient color; w reserved
+    public int4     Count;                       // x = active light count; yzw reserved (int4 for std140)
+    public GpuLight Lights[ECH_MAX_LIGHTS];
+};
+
+public ConstantBuffer<LightConstants> g_Lights;
+
 // ---- Shared helpers ----
 
 /** @brief Transform an object-space position to clip space through the system CBs. */

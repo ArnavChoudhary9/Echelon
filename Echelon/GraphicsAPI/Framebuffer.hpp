@@ -65,6 +65,7 @@ namespace Echelon {
         bool                                HasDepthAttachment = false;
         Ref<RenderPass>                     CompatiblePass     = nullptr;
         uint32_t                            Layers             = 1; ///< >1 for layered rendering (e.g. cubemap faces)
+        uint32_t                            Samples            = 1; ///< >1 = MSAA; color attachments returned by GetColorAttachment are the resolved single-sample textures
         std::string                         DebugName          = "";
     };
 
@@ -120,6 +121,23 @@ namespace Echelon {
          * @brief Query whether this framebuffer has a depth attachment.
          */
         virtual bool HasDepthAttachment() const = 0;
+
+        /**
+         * @brief MSAA sample count (1 = single-sample).
+         */
+        virtual uint32_t GetSamples() const = 0;
+
+        /** @brief Convenience: true when this framebuffer is multisampled. */
+        virtual bool IsMultisampled() const { return GetSamples() > 1; }
+
+        /**
+         * @brief Resolve multisampled attachments into their single-sample textures.
+         *
+         * Called after a render pass targeting a multisampled framebuffer, so the
+         * (single-sample) textures returned by GetColorAttachment become readable by
+         * later passes. No-op for single-sample framebuffers.
+         */
+        virtual void Resolve() {}
 
         /**
          * @brief Resize all attachments.
