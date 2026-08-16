@@ -58,16 +58,21 @@ project "EchelonEditor"
             -- slang-glslang.dll) copied here — the repo currently vendors Linux libs only.
             -- Copy Slang shaders next to the executable.
             -- Echelon.slang is the engine-owned ABI contract (import Echelon).
-            -- Flat/Error/Basic are renderer-owned (Ray renderer).
+            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
+            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Albedo.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Textured.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Adjust.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -86,16 +91,21 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-rt.so.0.2026.14.1 %{cfg.buildtarget.directory}",
             -- Copy Slang shaders next to the executable.
             -- Echelon.slang is the engine-owned ABI contract (import Echelon).
-            -- Flat/Error/Basic are renderer-owned (Ray renderer).
+            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
+            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Albedo.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Textured.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Adjust.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
@@ -110,16 +120,21 @@ project "EchelonEditor"
             -- libslang-glslang.dylib) copied here — the repo currently vendors Linux libs only.
             -- Copy Slang shaders next to the executable.
             -- Echelon.slang is the engine-owned ABI contract (import Echelon).
-            -- Flat/Error/Basic are renderer-owned (Ray renderer).
+            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
+            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
             "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Echelon/Shaders/Echelon.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Basic.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Albedo.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Textured.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
+            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Adjust.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),

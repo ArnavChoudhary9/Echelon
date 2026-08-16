@@ -38,6 +38,8 @@ namespace Echelon {
     {
         Ref<Texture>  ExistingTexture = nullptr;   ///< Use an existing texture (may be null)
         TextureFormat Format          = TextureFormat::RGBA8_UNORM;
+        uint32_t      Layer           = 0;         ///< Cubemap face (0-5) or array layer to render into (existing cube/array textures)
+        uint32_t      MipLevel        = 0;         ///< Mip level of the attachment texture to render into (e.g. prefiltered-env roughness levels)
     };
 
     /**

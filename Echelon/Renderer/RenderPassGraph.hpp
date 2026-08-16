@@ -123,6 +123,7 @@ namespace Echelon {
         void ComputePassSize(const PassDesc& pass, uint32_t& outW, uint32_t& outH) const;
         void ResolveResourceSize(const std::string& resource, uint32_t& outW, uint32_t& outH) const;
         bool CreateFramebuffers();   ///< (re)build framebuffers for all compiled passes at m_Width/m_Height
+        void CreateComputeResources(); ///< (re)build standalone storage textures written by compute passes
 
         Ref<Device>                                m_Device;
         RenderPipelineDesc                         m_Desc;
@@ -132,6 +133,7 @@ namespace Echelon {
         std::vector<CompiledPass>                  m_Order;                 ///< resolved execution order
         std::unordered_map<std::string, size_t>    m_PassIndexByName;       ///< name -> index in m_Order
         std::unordered_map<std::string, AttachmentLocation> m_ResourceProducers; ///< resource -> producing attachment
+        std::unordered_map<std::string, Ref<Texture>> m_ComputeResources;   ///< standalone storage textures written by compute passes
         std::unordered_map<std::string, ExecuteFn> m_Callbacks;            ///< preserved across recompiles
         ExecuteFn                                  m_DefaultCallbacks[3]; ///< indexed by PassType
     };

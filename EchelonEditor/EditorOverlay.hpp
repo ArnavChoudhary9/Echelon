@@ -49,56 +49,68 @@ public:
         }
 
         if (!hasCamera) {
-            // ---- Camera entity ----
+            // ---- Down-looking camera over the scene ----
             Entity cameraEntity = m_Scene->AddEntity("Camera");
             auto& camTransform = cameraEntity.GetComponent<TransformComponent>();
-            camTransform.Position = { 0.0f, 0.0f, 5.0f };
+            camTransform.Position = { 0.0f, 14.0f, 10.0f };
+            camTransform.Rotation = { -52.0f, 0.0f, 0.0f };
 
             auto& cam = cameraEntity.AddComponent<CameraComponent>();
             cam.Primary = true;
-            cam.Cam.SetPerspective(60.0f, 0.1f, 1000.0f);
+            cam.Cam.SetPerspective(55.0f, 0.1f, 1000.0f);
             cam.Cam.SetViewportSize(window.GetWidth(), window.GetHeight());
             cam.Cam.SetPosition(camTransform.Position);
+            cam.Cam.SetRotation(camTransform.Rotation);
 
-            // ---- Procedural built-in cube (from the internal shape repository) ----
-            {
-                Entity cube = m_Scene->AddEntity("Cube");
-                cube.GetComponent<TransformComponent>().Position = { -1.2f, 0.0f, 0.0f };
+            auto addMesh = [&](const char* tag, const char* meshSrc, const char* material,
+                               glm::vec3 pos, glm::vec3 scale, glm::vec3 rot = glm::vec3(0.0f)) {
+                Entity e = m_Scene->AddEntity(tag);
+                auto& t = e.GetComponent<TransformComponent>();
+                t.Position = pos; t.Scale = scale; t.Rotation = rot;
+                e.AddComponent<MeshComponent>().MeshSource     = meshSrc;
+                e.AddComponent<MaterialComponent>().MaterialSource = material;
+            };
 
-                auto& mesh = cube.AddComponent<MeshComponent>();
-                mesh.MeshSource = "Cube"; // resolved to the built-in primitive
+            // ---- Ground plane + a row of PBR spheres + cube + monkey ----
+            addMesh("Ground", "Plane", "Materials/Ground.ehmaterial", { 0, 0, 0 }, { 30, 1, 30 });
+            addMesh("Sphere_Metal",   "Sphere", "Materials/Metal.ehmaterial",   { -6, 0.6f, -1 }, { 1.2f, 1.2f, 1.2f });
+            addMesh("Sphere_Gold",    "Sphere", "Materials/Gold.ehmaterial",    { -3, 0.6f, -1 }, { 1.2f, 1.2f, 1.2f });
+            addMesh("Sphere_Plastic", "Sphere", "Materials/Plastic.ehmaterial", {  0, 0.6f, -1 }, { 1.2f, 1.2f, 1.2f });
+            addMesh("Sphere_Orange",  "Sphere", "Materials/Orange.ehmaterial",  {  3, 0.6f, -1 }, { 1.2f, 1.2f, 1.2f });
+            addMesh("Sphere_Textured","Sphere", "Materials/Lit.ehmaterial",     {  6, 0.6f, -1 }, { 1.2f, 1.2f, 1.2f });
+            addMesh("Cube",   "Cube",            "Materials/Metal.ehmaterial",  { -2.5f, 0.6f, 3 }, { 1.2f, 1.2f, 1.2f }, { 0, 25, 0 });
+            addMesh("Monkey", "Meshs/Monkey.obj","Materials/Orange.ehmaterial", {  2.5f, 1.0f, 3 }, { 1, 1, 1 },        { 0, -35, 0 });
 
-                // Applying a material is the user's/renderer's responsibility — here we
-                // apply the engine's standard flat material. (Leaving it unset renders
-                // pink: the "no material applied" error signal.)
-                auto& mat = cube.AddComponent<MaterialComponent>();
-                mat.MaterialSource = "DefaultMaterial";
-            }
-
-            // ---- OBJ-loaded monkey (exercises the .obj importer + registry) ----
-            {
-                Entity obj = m_Scene->AddEntity("Monkey");
-                auto& t = obj.GetComponent<TransformComponent>();
-                t.Position = { 1.2f, 0.0f, 0.0f };
-                t.Scale    = { 0.7f, 0.7f, 0.7f };
-
-                auto& mesh = obj.AddComponent<MeshComponent>();
-                mesh.MeshSource = "Meshs/Monkey.obj"; // resolved via the OBJ importer
-
-                // A Material asset (Basic shader) with a reflection-driven albedo param.
-                auto& mat = obj.AddComponent<MaterialComponent>();
-                mat.MaterialSource = "Materials/Lit.ehmaterial";
-            }
-
-            // ---- Directional light (lighting scaffold; gathered into g_Lights each
-            // frame. Current shaders ignore it — a future PBR shader consumes it). ----
+            // ---- All three light types; sun/spot/point cast shadows ----
             {
                 Entity sun = m_Scene->AddEntity("Sun");
-                sun.GetComponent<TransformComponent>().Rotation = { -45.0f, -30.0f, 0.0f };
-                auto& light     = sun.AddComponent<LightComponent>();
-                light.Type      = LightType::Directional;
-                light.Color     = { 1.0f, 0.96f, 0.9f };
-                light.Intensity = 3.0f;
+                sun.GetComponent<TransformComponent>().Rotation = { -50.0f, -35.0f, 0.0f };
+                auto& l = sun.AddComponent<LightComponent>();
+                l.Type = LightType::Directional; l.Color = { 1.0f, 0.96f, 0.9f };
+                l.Intensity = 2.5f; l.Range = 40.0f; l.CastsShadows = true;
+            }
+            {
+                Entity spot = m_Scene->AddEntity("Spot");
+                auto& t = spot.GetComponent<TransformComponent>();
+                t.Position = { 0.0f, 9.0f, 3.0f }; t.Rotation = { -72.0f, 0.0f, 0.0f };
+                auto& l = spot.AddComponent<LightComponent>();
+                l.Type = LightType::Spot; l.Color = { 0.3f, 0.7f, 1.0f };
+                l.Intensity = 60.0f; l.Range = 25.0f; l.InnerAngle = 18.0f; l.OuterAngle = 30.0f;
+                l.CastsShadows = true;
+            }
+            {
+                Entity pt = m_Scene->AddEntity("PointWarm");
+                pt.GetComponent<TransformComponent>().Position = { -5.0f, 3.0f, 2.0f };
+                auto& l = pt.AddComponent<LightComponent>();
+                l.Type = LightType::Point; l.Color = { 1.0f, 0.5f, 0.2f };
+                l.Intensity = 40.0f; l.Range = 18.0f; l.CastsShadows = true; l.ShadowBias = 0.05f;
+            }
+            {
+                Entity pt = m_Scene->AddEntity("PointFill");
+                pt.GetComponent<TransformComponent>().Position = { 6.0f, 3.0f, -4.0f };
+                auto& l = pt.AddComponent<LightComponent>();
+                l.Type = LightType::Point; l.Color = { 0.4f, 0.5f, 1.0f };
+                l.Intensity = 20.0f; l.Range = 15.0f; l.CastsShadows = false;
             }
         }
     }
@@ -120,10 +132,10 @@ public:
         {
             auto registry = m_Scene->GetEntityRegistry().lock();
             if (registry) {
-                auto meshView = registry->view<MeshComponent, TransformComponent>();
-                for (auto&& [entity, mesh, tc] : meshView.each()) {
-                    tc.Rotation.y += 45.0f * deltaTime;
-                    tc.Rotation.x += 20.0f * deltaTime;
+                auto meshView = registry->view<MeshComponent, TransformComponent, TagComponent>();
+                for (auto&& [entity, mesh, tc, tag] : meshView.each()) {
+                    if (tag.Tag == "Ground") continue;   // the plane stays put
+                    tc.Rotation.y += 20.0f * deltaTime;   // gentle spin to show off shading
                 }
             }
         }

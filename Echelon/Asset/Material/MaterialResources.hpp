@@ -14,6 +14,7 @@
 #include "GraphicsAPI/Device.hpp"
 #include "GraphicsAPI/ShaderReflection.hpp"
 #include "Renderer/RendererAPI.hpp"
+#include "Renderer/RendererConstants.hpp"   // IsSystemUniformName / IsSystemSamplerName (single source of truth)
 #include "Asset/Material/MaterialParam.hpp"
 
 #include <functional>
@@ -25,9 +26,14 @@
 namespace Echelon {
 
     /** @brief True for the engine-provided system constant buffers (not material params). */
-    inline bool IsSystemUBO(const std::string& name) {
-        return name == "g_Frame" || name == "g_Object" || name == "g_Lights";
-    }
+    inline bool IsSystemUBO(const std::string& name) { return IsSystemUniformName(name); }
+
+    /**
+     * @brief True for the engine-provided system samplers (shadow maps + IBL), which the
+     *        renderer binds by name on the system descriptor set. They must NOT be treated
+     *        as material textures, or the material set would clobber the system bindings.
+     */
+    inline bool IsSystemSampler(const std::string& name) { return IsSystemSamplerName(name); }
 
     /** @brief GPU resources realizing a material's parameters for one shader. */
     struct MaterialGpuResources {
@@ -85,6 +91,7 @@ namespace Echelon {
                 { res.Block->Binding, DescriptorType::UniformBuffer, 1, ShaderStage::Fragment });
         }
         for (const auto& s : refl.Samplers) {
+            if (IsSystemSampler(s.Name)) continue;   // bound by the renderer's system set, not the material
             layoutDesc.Bindings.push_back(
                 { s.Binding, DescriptorType::CombinedImageSampler, 1, ShaderStage::Fragment });
         }
@@ -102,6 +109,7 @@ namespace Echelon {
             res.Set->SetBuffer(res.Block->Binding, res.ParamUBO);
         }
         for (const auto& s : refl.Samplers) {
+            if (IsSystemSampler(s.Name)) continue;   // bound by the renderer's system set, not the material
             Ref<Texture> tex = textureResolver ? textureResolver(s.Name) : nullptr;
             if (!tex) tex = fallbackTexture;
             if (tex && fallbackSampler)

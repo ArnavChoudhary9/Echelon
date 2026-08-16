@@ -1,17 +1,23 @@
 Material:
-  # Built-in RENDERER shader (widely used), textured + lit.
-  Shader: shader:Textured.slang
+  # Standard PBR material — albedo texture, dielectric.
+  Shader: shader:PBR.slang
   Params:
-    AlbedoColor:
+    BaseColor:
       Type: Float4
       Value: [1.0, 1.0, 1.0, 1.0]
-    Roughness:
-      Type: Float
-      Value: [0.4]
     Metallic:
       Type: Float
       Value: [0.0]
+    Roughness:
+      Type: Float
+      Value: [0.5]
+    Occlusion:
+      Type: Float
+      Value: [1.0]
+    UseAlbedoMap:
+      Type: Float
+      Value: [1.0]
   Textures:
-    # Reflected sampler name (u_AlbedoTex in Basic.slang) → texture asset path
+    # Reflected sampler name (u_Albedo in PBR.slang) → texture asset path
     # (relative to the project's Assets directory).
-    u_AlbedoTex: Images/1.jpg
+    u_Albedo: Images/1.jpg

@@ -505,15 +505,23 @@ namespace Echelon {
      *        TransformComponent (Rotation → facing for directional/spot, Position
      *        for point/spot). The renderer gathers all lights each frame into the
      *        g_Lights system UBO (see Echelon.slang / RayRenderer::BeginScene).
+     *
+     * Spot cones are authored as half-angles in DEGREES (editor-friendly) and
+     * converted to the cosines the shader expects via CosInner()/CosOuter().
+     * A light marked CastsShadows is eligible for a shadow map; the renderer caps
+     * shadow casters to one per light type (directional / spot / point).
      */
     class LightComponent {
     public:
-        LightType Type      = LightType::Directional;
-        glm::vec3 Color     = glm::vec3(1.0f);
-        float     Intensity = 1.0f;
-        float     Range     = 10.0f;   // point / spot falloff distance
-        float     InnerCone = 0.90f;   // spot: cos(inner angle)
-        float     OuterCone = 0.80f;   // spot: cos(outer angle)
+        LightType Type         = LightType::Directional;
+        glm::vec3 Color        = glm::vec3(1.0f);
+        float     Intensity    = 1.0f;
+        float     Range        = 10.0f;    // point / spot falloff distance (world units)
+        float     InnerAngle   = 25.0f;    // spot: inner cone half-angle (degrees) — full brightness inside
+        float     OuterAngle   = 35.0f;    // spot: outer cone half-angle (degrees) — falls to zero by here
+        bool      CastsShadows = true;     // eligible to cast a shadow map (renderer picks one caster per type)
+        float     ShadowBias   = 0.0015f;  // depth-compare bias to combat shadow acne
+        bool      Enabled      = true;     // soft on/off without removing the component
 
         LightComponent() = default;
         LightComponent(const LightComponent&) = default;
@@ -522,14 +530,22 @@ namespace Echelon {
 
         LightComponent Copy() const { return *this; }
 
+        /** @brief cos(inner half-angle) as packed into GpuLight.SpotParams.x for the shader. */
+        float CosInner() const { return glm::cos(glm::radians(InnerAngle)); }
+        /** @brief cos(outer half-angle) as packed into GpuLight.SpotParams.y for the shader. */
+        float CosOuter() const { return glm::cos(glm::radians(OuterAngle)); }
+
         void Serialize(YAML::Emitter& out) const {
             out << YAML::Key << "LightComponent" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "Type"      << YAML::Value << static_cast<uint32_t>(Type);
-            out << YAML::Key << "Color"     << YAML::Value << Color;
-            out << YAML::Key << "Intensity" << YAML::Value << Intensity;
-            out << YAML::Key << "Range"     << YAML::Value << Range;
-            out << YAML::Key << "InnerCone" << YAML::Value << InnerCone;
-            out << YAML::Key << "OuterCone" << YAML::Value << OuterCone;
+            out << YAML::Key << "Type"         << YAML::Value << static_cast<uint32_t>(Type);
+            out << YAML::Key << "Color"        << YAML::Value << Color;
+            out << YAML::Key << "Intensity"    << YAML::Value << Intensity;
+            out << YAML::Key << "Range"        << YAML::Value << Range;
+            out << YAML::Key << "InnerAngle"   << YAML::Value << InnerAngle;
+            out << YAML::Key << "OuterAngle"   << YAML::Value << OuterAngle;
+            out << YAML::Key << "CastsShadows" << YAML::Value << CastsShadows;
+            out << YAML::Key << "ShadowBias"   << YAML::Value << ShadowBias;
+            out << YAML::Key << "Enabled"      << YAML::Value << Enabled;
             out << YAML::EndMap;
         }
 
@@ -539,8 +555,16 @@ namespace Echelon {
             c.Color     = node["Color"].as<glm::vec3>(glm::vec3(1.0f));
             c.Intensity = node["Intensity"].as<float>(1.0f);
             c.Range     = node["Range"].as<float>(10.0f);
-            c.InnerCone = node["InnerCone"].as<float>(0.90f);
-            c.OuterCone = node["OuterCone"].as<float>(0.80f);
+
+            // Prefer the new degree-based cone; fall back to the legacy cosine keys.
+            if (node["InnerAngle"]) c.InnerAngle = node["InnerAngle"].as<float>(25.0f);
+            else if (node["InnerCone"]) c.InnerAngle = glm::degrees(glm::acos(glm::clamp(node["InnerCone"].as<float>(0.90f), -1.0f, 1.0f)));
+            if (node["OuterAngle"]) c.OuterAngle = node["OuterAngle"].as<float>(35.0f);
+            else if (node["OuterCone"]) c.OuterAngle = glm::degrees(glm::acos(glm::clamp(node["OuterCone"].as<float>(0.80f), -1.0f, 1.0f)));
+
+            c.CastsShadows = node["CastsShadows"].as<bool>(true);
+            c.ShadowBias   = node["ShadowBias"].as<float>(0.0015f);
+            c.Enabled      = node["Enabled"].as<bool>(true);
             return c;
         }
     };

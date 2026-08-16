@@ -1,15 +1,17 @@
 Material:
-  # Built-in RENDERER shader (widely used), flat albedo + lit.
-  Shader: shader:Albedo.slang
+  # Standard PBR material — flat orange dielectric.
+  Shader: shader:PBR.slang
   Params:
-    AlbedoColor:
+    BaseColor:
       Type: Float4
       Value: [1.0, 0.55, 0.2, 1.0]
-    Roughness:
-      Type: Float
-      Value: [0.4]
     Metallic:
       Type: Float
       Value: [0.0]
-  # No Textures block: the reflected u_AlbedoTex sampler falls back to the 1x1
-  # white texture, so the surface shows the flat orange AlbedoColor (× white).
+    Roughness:
+      Type: Float
+      Value: [0.45]
+    Occlusion:
+      Type: Float
+      Value: [1.0]
+  # No Textures block: the surface shows the flat BaseColor.

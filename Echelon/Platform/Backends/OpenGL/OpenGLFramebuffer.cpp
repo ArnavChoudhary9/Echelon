@@ -73,6 +73,24 @@ namespace Echelon {
         }
     }
 
+    // Attach a texture to an FBO attachment point, deriving the GL attach call from the
+    // texture's real target: a plain 2D texture, a single cubemap face, or one array layer.
+    // Layer/Mip come from the FramebufferAttachment (0/0 for ordinary 2D targets), which is
+    // how the renderer drives per-face cubemap rendering (shadows, IBL) and per-mip prefiltering.
+    static void AttachFramebufferTexture(GLenum attachPoint, const Ref<OpenGLTexture>& tex,
+                                         uint32_t layer, uint32_t mip)
+    {
+        const GLenum target = tex->GetGLTarget();
+        if (target == GL_TEXTURE_CUBE_MAP) {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, attachPoint,
+                                   GL_TEXTURE_CUBE_MAP_POSITIVE_X + layer, tex->GetHandle(), mip);
+        } else if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D) {
+            glFramebufferTextureLayer(GL_FRAMEBUFFER, attachPoint, tex->GetHandle(), mip, layer);
+        } else {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, attachPoint, GL_TEXTURE_2D, tex->GetHandle(), mip);
+        }
+    }
+
     void OpenGLFramebuffer::Invalidate()
     {
         Cleanup();
@@ -107,8 +125,7 @@ namespace Echelon {
                 tex = CreateRef<OpenGLTexture>(td);
             }
 
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
-                                   GL_TEXTURE_2D, tex->GetHandle(), 0);
+            AttachFramebufferTexture(GL_COLOR_ATTACHMENT0 + i, tex, att.Layer, att.MipLevel);
             m_ColorAttachments.push_back(tex);
         }
 
@@ -135,8 +152,7 @@ namespace Echelon {
                 attachPoint = GL_DEPTH_STENCIL_ATTACHMENT;
             }
 
-            glFramebufferTexture2D(GL_FRAMEBUFFER, attachPoint,
-                                   GL_TEXTURE_2D, tex->GetHandle(), 0);
+            AttachFramebufferTexture(attachPoint, tex, att.Layer, att.MipLevel);
             m_DepthAttachment = tex;
         }
 

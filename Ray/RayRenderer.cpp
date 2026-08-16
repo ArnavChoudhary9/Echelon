@@ -6,6 +6,8 @@
 #include "Echelon/GraphicsAPI/Shader.hpp"
 #include "Echelon/GraphicsAPI/Swapchain.hpp"
 #include "Echelon/GraphicsAPI/RenderPass.hpp"
+#include "Echelon/GraphicsAPI/Framebuffer.hpp"
+#include "Echelon/GraphicsAPI/Texture.hpp"
 #include "Echelon/GraphicsAPI/CommandBuffer.hpp"
 #include "Echelon/GraphicsAPI/DescriptorSet.hpp"
 
@@ -20,6 +22,7 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtc/matrix_inverse.hpp"             // inverseTranspose
+#include "glm/gtc/matrix_transform.hpp"          // lookAt / ortho / perspective
 
 #include <algorithm>
 #include <cstring>
@@ -159,6 +162,27 @@ namespace Echelon {
         m_FrameUBO          = nullptr;
         m_ObjectUBO         = nullptr;
         m_LightUBO          = nullptr;
+        m_ShadowUBO         = nullptr;
+        m_ShadowPassUBO     = nullptr;
+        m_IblUBO            = nullptr;
+        m_ShadowDirMap      = nullptr;
+        m_ShadowSpotMap     = nullptr;
+        m_ShadowPointMap    = nullptr;
+        m_ShadowPointDepth  = nullptr;
+        m_EnvCube           = nullptr;
+        m_IrradianceMap     = nullptr;
+        m_PrefilterMap      = nullptr;
+        m_BrdfLUT           = nullptr;
+        m_ShadowSampler     = nullptr;
+        m_ShadowDepthPass   = nullptr;
+        m_ShadowCubePass    = nullptr;
+        m_ShadowDirFB       = nullptr;
+        m_ShadowSpotFB      = nullptr;
+        for (auto& fb : m_ShadowPointFB) fb = nullptr;
+        m_ShadowDepthShader = nullptr;
+        m_ShadowCubeShader  = nullptr;
+        m_ShadowDepthPipeline = nullptr;
+        m_ShadowCubePipeline  = nullptr;
         m_FlatPipeline      = nullptr;
         m_FlatShaderAsset   = nullptr;
         m_ErrorPipeline     = nullptr;
@@ -234,6 +258,31 @@ namespace Echelon {
         lightDesc.DebugName = "Ray_LightUBO";
         m_LightUBO = m_Device->CreateBuffer(lightDesc);
 
+        // Shadow + IBL system UBOs. Seeded with "no casters / IBL off" defaults so a PBR
+        // shader renders correctly before the shadow/IBL systems fill them (Phases 5/6).
+        BufferDesc shadowDesc;
+        shadowDesc.Size      = sizeof(ShadowConstantsCPU);
+        shadowDesc.Usage     = BufferUsage::UniformBuffer;
+        shadowDesc.Memory    = MemoryUsage::CPUToGPU;
+        shadowDesc.DebugName = "Ray_ShadowUBO";
+        m_ShadowUBO = m_Device->CreateBuffer(shadowDesc);
+        { ShadowConstantsCPU sc; m_ShadowUBO->SetData(&sc, sizeof(sc)); }
+
+        BufferDesc shadowPassDesc;
+        shadowPassDesc.Size      = sizeof(ShadowPassConstantsCPU);
+        shadowPassDesc.Usage     = BufferUsage::UniformBuffer;
+        shadowPassDesc.Memory    = MemoryUsage::CPUToGPU;
+        shadowPassDesc.DebugName = "Ray_ShadowPassUBO";
+        m_ShadowPassUBO = m_Device->CreateBuffer(shadowPassDesc);
+
+        BufferDesc iblDesc;
+        iblDesc.Size      = sizeof(IblConstantsCPU);
+        iblDesc.Usage     = BufferUsage::UniformBuffer;
+        iblDesc.Memory    = MemoryUsage::CPUToGPU;
+        iblDesc.DebugName = "Ray_IblUBO";
+        m_IblUBO = m_Device->CreateBuffer(iblDesc);
+        { IblConstantsCPU ic; m_IblUBO->SetData(&ic, sizeof(ic)); }
+
         // A generic 3-binding layout (GL ignores layout at bind time; buffers are
         // assigned to the per-shader reflected bindings in BindSystemConstants).
         DescriptorSetLayoutDesc slDesc;
@@ -265,6 +314,9 @@ namespace Echelon {
         m_ErrorShaderAsset = LoadShaderAsset("Error.slang");
         BuildDefaultPipeline();
 
+        CreateShadowResources();
+        PrecomputeIBL();
+
         m_LastAssetEpoch = AssetManager::Get().GetEpoch();
     }
 
@@ -285,12 +337,413 @@ namespace Echelon {
         return device->CreatePipeline(pd);
     }
 
+    // A fullscreen-triangle pipeline (depth off) for offscreen precompute passes.
+    static Ref<Pipeline> BuildFullscreenPipeline(const Ref<Device>& device, const Ref<RenderPass>& pass,
+                                                 const Ref<ShaderAsset>& shader, const char* name) {
+        if (!shader || !shader->GetGpuShader()) return nullptr;
+        PipelineDesc pd;
+        pd.ShaderProgram = shader->GetGpuShader();
+        pd.Topology      = PrimitiveTopology::TriangleList;
+        pd.Pass          = pass;
+        pd.Layout        = StandardVertex::FromReflection(shader->GetReflection());   // empty (SV_VertexID)
+        pd.Depth.DepthTestEnable  = false;
+        pd.Depth.DepthWriteEnable = false;
+        pd.Raster.Cull            = CullMode::None;
+        pd.DebugName     = name;
+        return device->CreatePipeline(pd);
+    }
+
     void RayRenderer::BuildDefaultPipeline() {
         const Ref<RenderPass> scenePass = GetScenePass();
         m_FlatPipeline  = BuildPipeline(m_Device, scenePass, m_FlatShaderAsset,  "Ray_FlatPipeline");
         m_ErrorPipeline = BuildPipeline(m_Device, scenePass, m_ErrorShaderAsset, "Ray_ErrorPipeline");
         if (!m_FlatPipeline)  ECHELON_LOG_ERROR("Ray: no flat shader — default pipeline not built");
         if (!m_ErrorPipeline) ECHELON_LOG_ERROR("Ray: no error shader — pink fallback unavailable");
+    }
+
+    // ------------------------------------------------------------------
+    // Shadow system (renderer-owned; one caster per light type)
+    // ------------------------------------------------------------------
+
+    void RayRenderer::CreateShadowResources() {
+        if (!m_Device) return;
+
+        // Nearest/clamp sampler for shadow-map reads (manual PCF; no hardware compare).
+        SamplerDesc ss;
+        ss.MinFilter    = FilterMode::Nearest;
+        ss.MagFilter    = FilterMode::Nearest;
+        ss.MipMapFilter = FilterMode::Nearest;
+        ss.AddressU     = AddressMode::ClampToEdge;
+        ss.AddressV     = AddressMode::ClampToEdge;
+        ss.AddressW     = AddressMode::ClampToEdge;
+        m_ShadowSampler = m_Device->CreateSampler(ss);
+
+        // Depth maps (directional + spot) — sampleable D32F 2D textures.
+        TextureDesc dird;
+        dird.Type   = TextureType::Depth;
+        dird.Format = TextureFormat::D32_FLOAT;
+        dird.Usage  = TextureUsage::Sampled | TextureUsage::DepthStencil;
+        dird.Width  = dird.Height = m_ShadowRes;
+        dird.DebugName = "ShadowDirMap";
+        m_ShadowDirMap = m_Device->CreateTexture(dird);
+        dird.DebugName = "ShadowSpotMap";
+        m_ShadowSpotMap = m_Device->CreateTexture(dird);
+
+        // Point light distance cubemap (R32F) + scratch depth for z-testing each face.
+        TextureDesc cubed;
+        cubed.Type   = TextureType::TextureCube;
+        cubed.Format = TextureFormat::R32_FLOAT;
+        cubed.Usage  = TextureUsage::Sampled | TextureUsage::RenderTarget;
+        cubed.Width  = cubed.Height = m_PointShadowRes;
+        cubed.DebugName = "ShadowPointMap";
+        m_ShadowPointMap = m_Device->CreateTexture(cubed);
+
+        TextureDesc pdep;
+        pdep.Type   = TextureType::Depth;
+        pdep.Format = TextureFormat::D32_FLOAT;
+        pdep.Usage  = TextureUsage::DepthStencil;
+        pdep.Width  = pdep.Height = m_PointShadowRes;
+        pdep.DebugName = "ShadowPointDepth";
+        m_ShadowPointDepth = m_Device->CreateTexture(pdep);
+
+        // Render passes.
+        RenderPassDesc depthPass;
+        depthPass.HasDepthAttachment       = true;
+        depthPass.DepthAttachment.Format   = TextureFormat::D32_FLOAT;
+        depthPass.DepthAttachment.Load     = LoadOp::Clear;
+        depthPass.DepthAttachment.Store    = StoreOp::Store;
+        depthPass.DepthAttachment.Clear.Depth = 1.0f;
+        depthPass.DebugName = "ShadowDepthPass";
+        m_ShadowDepthPass = m_Device->CreateRenderPass(depthPass);
+
+        RenderPassDesc cubePass;
+        ColorAttachmentDesc cc;
+        cc.Format = TextureFormat::R32_FLOAT;
+        cc.Load   = LoadOp::Clear;
+        cc.Store  = StoreOp::Store;
+        cc.Clear  = ClearColor{ 1.0f, 1.0f, 1.0f, 1.0f };   // cleared "far" = lit
+        cubePass.ColorAttachments.push_back(cc);
+        cubePass.HasDepthAttachment       = true;
+        cubePass.DepthAttachment.Format   = TextureFormat::D32_FLOAT;
+        cubePass.DepthAttachment.Load     = LoadOp::Clear;
+        cubePass.DepthAttachment.Store    = StoreOp::DontCare;
+        cubePass.DepthAttachment.Clear.Depth = 1.0f;
+        cubePass.DebugName = "ShadowCubePass";
+        m_ShadowCubePass = m_Device->CreateRenderPass(cubePass);
+
+        // Framebuffers.
+        FramebufferDesc dfb;
+        dfb.Width  = dfb.Height = m_ShadowRes;
+        dfb.HasDepthAttachment              = true;
+        dfb.DepthAttachment.ExistingTexture = m_ShadowDirMap;
+        dfb.DepthAttachment.Format          = TextureFormat::D32_FLOAT;
+        dfb.CompatiblePass = m_ShadowDepthPass;
+        dfb.DebugName      = "ShadowDirFB";
+        m_ShadowDirFB = m_Device->CreateFramebuffer(dfb);
+
+        dfb.DepthAttachment.ExistingTexture = m_ShadowSpotMap;
+        dfb.DebugName = "ShadowSpotFB";
+        m_ShadowSpotFB = m_Device->CreateFramebuffer(dfb);
+
+        for (uint32_t f = 0; f < 6; ++f) {
+            FramebufferDesc cfb;
+            cfb.Width = cfb.Height = m_PointShadowRes;
+            FramebufferAttachment color;
+            color.ExistingTexture = m_ShadowPointMap;
+            color.Format          = TextureFormat::R32_FLOAT;
+            color.Layer           = f;                         // cube face
+            cfb.ColorAttachments.push_back(color);
+            cfb.HasDepthAttachment              = true;
+            cfb.DepthAttachment.ExistingTexture = m_ShadowPointDepth;
+            cfb.DepthAttachment.Format          = TextureFormat::D32_FLOAT;
+            cfb.CompatiblePass = m_ShadowCubePass;
+            cfb.DebugName      = "ShadowPointFB";
+            m_ShadowPointFB[f] = m_Device->CreateFramebuffer(cfb);
+        }
+
+        // Depth-only shaders + pipelines (built against the shadow passes).
+        m_ShadowDepthShader = LoadShaderAsset("ShadowDepth.slang");
+        m_ShadowCubeShader  = LoadShaderAsset("ShadowCube.slang");
+        m_ShadowDepthPipeline = BuildPipeline(m_Device, m_ShadowDepthPass, m_ShadowDepthShader, "Ray_ShadowDepthPipeline");
+        m_ShadowCubePipeline  = BuildPipeline(m_Device, m_ShadowCubePass,  m_ShadowCubeShader,  "Ray_ShadowCubePipeline");
+        if (!m_ShadowDepthPipeline) ECHELON_LOG_ERROR("Ray: shadow depth pipeline unavailable (missing ShadowDepth.slang?)");
+        if (!m_ShadowCubePipeline)  ECHELON_LOG_ERROR("Ray: shadow cube pipeline unavailable (missing ShadowCube.slang?)");
+    }
+
+    // Draw all scene geometry through a depth/distance pipeline (used by every shadow view).
+    void RayRenderer::RenderSceneDepth(const Ref<Pipeline>& pipeline) {
+        if (!pipeline) return;
+        m_CommandBuffer->BindPipeline(pipeline);
+        BindSystemConstants(pipeline);   // binds g_Object + g_ShadowPass by name
+        const auto& shader = pipeline->GetShader();
+
+        for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
+            for (const auto& batch : group.Batches) {
+                for (size_t i = 0; i < batch.Transforms.size(); ++i) {
+                    const auto& transform = batch.Transforms[i];
+                    if (batch.IndexBuffer && batch.IndexCount > 0)
+                        DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader, transform, batch.IndexCount);
+                    else
+                        Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
+                }
+            }
+        }
+    }
+
+    void RayRenderer::RenderShadowMaps() {
+        ShadowConstantsCPU sc;   // defaults: all caster indices = -1 (no shadows)
+
+        // Scene bounds (from the draw list) → fit the directional ortho frustum.
+        glm::vec3 bmin(1e9f), bmax(-1e9f);
+        bool hasGeo = false;
+        for (const auto& group : m_RenderGraph.GetPipelineGroups())
+            for (const auto& batch : group.Batches)
+                for (const auto& t : batch.Transforms) {
+                    const glm::vec3 p = glm::vec3(t[3]);
+                    const float r = 0.87f * glm::max(glm::length(glm::vec3(t[0])),
+                                          glm::max(glm::length(glm::vec3(t[1])), glm::length(glm::vec3(t[2]))));
+                    bmin = glm::min(bmin, p - glm::vec3(r));
+                    bmax = glm::max(bmax, p + glm::vec3(r));
+                    hasGeo = true;
+                }
+        const glm::vec3 center = hasGeo ? (bmin + bmax) * 0.5f : glm::vec3(0.0f);
+        float radius = hasGeo ? glm::length(bmax - center) + 1.0f : 15.0f;
+        radius = glm::max(radius, 1.0f);
+
+        const float normalBias = 0.05f;
+
+        auto setPass = [&](const glm::mat4& vp, const glm::vec3& pos, float farp) {
+            ShadowPassConstantsCPU spc;
+            spc.LightViewProj = vp;
+            spc.LightPosFar   = glm::vec4(pos, farp);
+            if (m_ShadowPassUBO) m_ShadowPassUBO->SetData(&spc, sizeof(spc));
+        };
+        Viewport vp; vp.X = 0.0f; vp.Y = 0.0f; vp.MinDepth = 0.0f; vp.MaxDepth = 1.0f;
+
+        // ---- Directional (orthographic) ----
+        if (m_DirCaster.Index >= 0 && m_ShadowDirFB && m_ShadowDepthPipeline) {
+            const glm::vec3 dir = glm::normalize(m_DirCaster.Direction);
+            const glm::vec3 up  = (glm::abs(dir.y) > 0.99f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+            const glm::vec3 eye = center - dir * (radius * 2.0f + 1.0f);
+            const glm::mat4 view = glm::lookAt(eye, center, up);
+            const float ext = radius * 1.15f;
+            const glm::mat4 proj = glm::ortho(-ext, ext, -ext, ext, 0.05f, radius * 4.0f + 2.0f);
+            const glm::mat4 lvp  = proj * view;
+            sc.DirViewProj = lvp;
+            sc.DirParams   = glm::vec4(static_cast<float>(m_DirCaster.Index), m_DirCaster.Bias, normalBias, 1.0f);
+
+            setPass(lvp, glm::vec3(0.0f), 1.0f);
+            vp.Width = vp.Height = static_cast<float>(m_ShadowRes);
+            m_CommandBuffer->SetViewport(vp);
+            m_CommandBuffer->BeginRenderPass(m_ShadowDepthPass, m_ShadowDirFB);
+            RenderSceneDepth(m_ShadowDepthPipeline);
+            m_CommandBuffer->EndRenderPass();
+        }
+
+        // ---- Spot (perspective) ----
+        if (m_SpotCaster.Index >= 0 && m_ShadowSpotFB && m_ShadowDepthPipeline) {
+            const glm::vec3 pos = m_SpotCaster.Position;
+            const glm::vec3 dir = glm::normalize(m_SpotCaster.Direction);
+            const glm::vec3 up  = (glm::abs(dir.y) > 0.99f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+            const float outerHalf = glm::acos(glm::clamp(m_SpotCaster.CosOuter, -1.0f, 1.0f));
+            const float fov  = glm::min(glm::radians(179.0f), 2.0f * outerHalf * 1.1f);
+            const float farp = glm::max(m_SpotCaster.Range, 1.0f);
+            const glm::mat4 view = glm::lookAt(pos, pos + dir, up);
+            const glm::mat4 proj = glm::perspective(fov, 1.0f, 0.05f, farp);
+            const glm::mat4 lvp  = proj * view;
+            sc.SpotViewProj = lvp;
+            sc.SpotParams   = glm::vec4(static_cast<float>(m_SpotCaster.Index), m_SpotCaster.Bias, normalBias, 1.0f);
+
+            setPass(lvp, glm::vec3(0.0f), 1.0f);
+            vp.Width = vp.Height = static_cast<float>(m_ShadowRes);
+            m_CommandBuffer->SetViewport(vp);
+            m_CommandBuffer->BeginRenderPass(m_ShadowDepthPass, m_ShadowSpotFB);
+            RenderSceneDepth(m_ShadowDepthPipeline);
+            m_CommandBuffer->EndRenderPass();
+        }
+
+        // ---- Point (depth cubemap, 6 faces) ----
+        if (m_PointCaster.Index >= 0 && m_ShadowCubePipeline) {
+            const glm::vec3 pos  = m_PointCaster.Position;
+            const float     farp = glm::max(m_PointCaster.Range, 1.0f);
+            const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.05f, farp);
+            const glm::vec3 dirs[6] = { { 1,0,0 }, { -1,0,0 }, { 0,1,0 }, { 0,-1,0 }, { 0,0,1 }, { 0,0,-1 } };
+            const glm::vec3 ups[6]  = { { 0,-1,0 }, { 0,-1,0 }, { 0,0,1 }, { 0,0,-1 }, { 0,-1,0 }, { 0,-1,0 } };
+            sc.PointPosIndex = glm::vec4(pos, static_cast<float>(m_PointCaster.Index));
+            sc.PointParams   = glm::vec4(farp, glm::max(m_PointCaster.Bias, 0.05f), 1.0f, 0.0f);
+
+            vp.Width = vp.Height = static_cast<float>(m_PointShadowRes);
+            for (uint32_t f = 0; f < 6; ++f) {
+                if (!m_ShadowPointFB[f]) continue;
+                const glm::mat4 lvp = proj * glm::lookAt(pos, pos + dirs[f], ups[f]);
+                setPass(lvp, pos, farp);
+                m_CommandBuffer->SetViewport(vp);
+                m_CommandBuffer->BeginRenderPass(m_ShadowCubePass, m_ShadowPointFB[f]);
+                RenderSceneDepth(m_ShadowCubePipeline);
+                m_CommandBuffer->EndRenderPass();
+            }
+        }
+
+        sc.MapParams = glm::vec4(1.0f / static_cast<float>(m_ShadowRes),
+                                 1.0f / static_cast<float>(m_ShadowRes),
+                                 1.0f / static_cast<float>(m_PointShadowRes), 0.0f);
+        if (m_ShadowUBO) m_ShadowUBO->SetData(&sc, sizeof(sc));
+    }
+
+    // ------------------------------------------------------------------
+    // IBL precompute (procedural sky → env cube → irradiance + prefilter + BRDF LUT)
+    // Runs once at init. On any failure IBL stays disabled (PBR falls back to constant
+    // ambient), so a broken precompute never breaks the main render.
+    // ------------------------------------------------------------------
+    void RayRenderer::PrecomputeIBL() {
+        if (!m_Device || !m_CommandBuffer) return;
+
+        constexpr uint32_t envSize = 128, irrSize = 32, preSize = 128, lutSize = 512;
+        constexpr uint32_t preMips = 5;
+
+        auto makeCube = [&](uint32_t size, uint32_t mips, const char* dbg) {
+            TextureDesc d;
+            d.Type   = TextureType::TextureCube;
+            d.Format = TextureFormat::RGBA16_FLOAT;
+            d.Usage  = TextureUsage::Sampled | TextureUsage::RenderTarget;
+            d.Width  = d.Height = size;
+            d.MipLevels = mips;
+            d.DebugName = dbg;
+            return m_Device->CreateTexture(d);
+        };
+        m_EnvCube       = makeCube(envSize, 1, "IblEnvCube");
+        m_IrradianceMap = makeCube(irrSize, 1, "IblIrradiance");
+        m_PrefilterMap  = makeCube(preSize, preMips, "IblPrefilter");
+
+        TextureDesc lutd;
+        lutd.Type   = TextureType::Texture2D;
+        lutd.Format = TextureFormat::RG16_FLOAT;
+        lutd.Usage  = TextureUsage::Sampled | TextureUsage::RenderTarget;
+        lutd.Width  = lutd.Height = lutSize;
+        lutd.DebugName = "IblBrdfLUT";
+        m_BrdfLUT = m_Device->CreateTexture(lutd);
+
+        RenderPassDesc cubePassDesc;
+        { ColorAttachmentDesc c; c.Format = TextureFormat::RGBA16_FLOAT; c.Load = LoadOp::DontCare; c.Store = StoreOp::Store; cubePassDesc.ColorAttachments.push_back(c); }
+        cubePassDesc.DebugName = "IblCubePass";
+        auto iblCubePass = m_Device->CreateRenderPass(cubePassDesc);
+
+        RenderPassDesc lutPassDesc;
+        { ColorAttachmentDesc c; c.Format = TextureFormat::RG16_FLOAT; c.Load = LoadOp::DontCare; c.Store = StoreOp::Store; lutPassDesc.ColorAttachments.push_back(c); }
+        lutPassDesc.DebugName = "IblLutPass";
+        auto iblLutPass = m_Device->CreateRenderPass(lutPassDesc);
+
+        BufferDesc gd;
+        gd.Size = sizeof(IblGenParamsCPU);
+        gd.Usage = BufferUsage::UniformBuffer;
+        gd.Memory = MemoryUsage::CPUToGPU;
+        gd.DebugName = "IblGenUBO";
+        auto genUBO = m_Device->CreateBuffer(gd);
+
+        auto skySh = LoadShaderAsset("Sky.slang");
+        auto irrSh = LoadShaderAsset("IrradianceConv.slang");
+        auto preSh = LoadShaderAsset("Prefilter.slang");
+        auto lutSh = LoadShaderAsset("BrdfLUT.slang");
+        auto skyPipe = BuildFullscreenPipeline(m_Device, iblCubePass, skySh, "Ray_IblSky");
+        auto irrPipe = BuildFullscreenPipeline(m_Device, iblCubePass, irrSh, "Ray_IblIrr");
+        auto prePipe = BuildFullscreenPipeline(m_Device, iblCubePass, preSh, "Ray_IblPre");
+        auto lutPipe = BuildFullscreenPipeline(m_Device, iblLutPass, lutSh, "Ray_IblLut");
+        if (!skyPipe || !irrPipe || !prePipe || !lutPipe) {
+            ECHELON_LOG_ERROR("Ray: IBL shaders unavailable — IBL disabled (constant ambient fallback)");
+            return;
+        }
+
+        // Cube-face basis (GL cubemap texel→direction convention).
+        struct Face { glm::vec4 ma, sc, tc; };
+        const Face faces[6] = {
+            { { 1, 0, 0, 0 }, {  0, 0, -1, 0 }, { 0, -1,  0, 0 } }, // +X
+            { { -1, 0, 0, 0 }, { 0, 0,  1, 0 }, { 0, -1,  0, 0 } }, // -X
+            { { 0, 1, 0, 0 }, {  1, 0,  0, 0 }, { 0,  0,  1, 0 } }, // +Y
+            { { 0, -1, 0, 0 }, { 1, 0,  0, 0 }, { 0,  0, -1, 0 } }, // -Y
+            { { 0, 0, 1, 0 }, {  1, 0,  0, 0 }, { 0, -1,  0, 0 } }, // +Z
+            { { 0, 0, -1, 0 }, { -1, 0, 0, 0 }, { 0, -1,  0, 0 } }, // -Z
+        };
+        glm::vec3 sunDir = (m_DirCaster.Index >= 0)
+            ? glm::normalize(-m_DirCaster.Direction)
+            : glm::normalize(glm::vec3(0.3f, 0.8f, 0.4f));
+
+        auto bindGen = [&](const Ref<Pipeline>& pipe, const Ref<Texture>& env) {
+            const ShaderReflection& refl = pipe->GetShader()->GetReflection();
+            auto set = m_Device->AllocateDescriptorSet(m_FullscreenLayout);
+            uint32_t b = 0;
+            if (FindUBOBinding(refl, "g_IblGen", b))    set->SetBuffer(b, genUBO);
+            if (env && FindSamplerBinding(refl, "g_EnvCube", b)) set->SetTexture(b, env, m_LinearSampler);
+            set->Update();
+            m_CommandBuffer->BindDescriptorSet(set, 0);
+        };
+
+        Viewport vp; vp.X = 0.0f; vp.Y = 0.0f; vp.MinDepth = 0.0f; vp.MaxDepth = 1.0f;
+
+        auto renderCube = [&](const Ref<Texture>& target, uint32_t size, uint32_t mip,
+                              const Ref<Pipeline>& pipe, const Ref<Texture>& env, float roughness) {
+            for (uint32_t f = 0; f < 6; ++f) {
+                IblGenParamsCPU g;
+                g.MaAxis = faces[f].ma; g.ScVec = faces[f].sc; g.TcVec = faces[f].tc;
+                g.Params = glm::vec4(roughness, static_cast<float>(preMips), 0.0f, 0.0f);
+                g.Sun    = glm::vec4(sunDir, 6.0f);
+                genUBO->SetData(&g, sizeof(g));
+
+                FramebufferDesc fb;
+                fb.Width = fb.Height = size;
+                FramebufferAttachment att;
+                att.ExistingTexture = target;
+                att.Format   = TextureFormat::RGBA16_FLOAT;
+                att.Layer    = f;
+                att.MipLevel = mip;
+                fb.ColorAttachments.push_back(att);
+                fb.CompatiblePass = iblCubePass;
+                auto fbo = m_Device->CreateFramebuffer(fb);
+
+                vp.Width = vp.Height = static_cast<float>(size);
+                m_CommandBuffer->SetViewport(vp);
+                m_CommandBuffer->BeginRenderPass(iblCubePass, fbo);
+                m_CommandBuffer->BindPipeline(pipe);
+                bindGen(pipe, env);
+                m_CommandBuffer->Draw(3, 1, 0, 0);
+                m_CommandBuffer->EndRenderPass();
+            }
+        };
+
+        // 1) Environment cube from the procedural sky.
+        renderCube(m_EnvCube, envSize, 0, skyPipe, nullptr, 0.0f);
+        // 2) Diffuse irradiance from the env cube.
+        renderCube(m_IrradianceMap, irrSize, 0, irrPipe, m_EnvCube, 0.0f);
+        // 3) Prefiltered specular per roughness mip.
+        for (uint32_t mip = 0; mip < preMips; ++mip) {
+            uint32_t msize = std::max(1u, preSize >> mip);
+            float rough = (preMips > 1) ? static_cast<float>(mip) / static_cast<float>(preMips - 1) : 0.0f;
+            renderCube(m_PrefilterMap, msize, mip, prePipe, m_EnvCube, rough);
+        }
+        // 4) BRDF LUT (fullscreen 2D).
+        {
+            FramebufferDesc fb;
+            fb.Width = fb.Height = lutSize;
+            FramebufferAttachment att;
+            att.ExistingTexture = m_BrdfLUT;
+            att.Format = TextureFormat::RG16_FLOAT;
+            fb.ColorAttachments.push_back(att);
+            fb.CompatiblePass = iblLutPass;
+            auto fbo = m_Device->CreateFramebuffer(fb);
+            vp.Width = vp.Height = static_cast<float>(lutSize);
+            m_CommandBuffer->SetViewport(vp);
+            m_CommandBuffer->BeginRenderPass(iblLutPass, fbo);
+            m_CommandBuffer->BindPipeline(lutPipe);
+            m_CommandBuffer->Draw(3, 1, 0, 0);
+            m_CommandBuffer->EndRenderPass();
+        }
+
+        // Enable IBL for PBR.
+        IblConstantsCPU ic;
+        ic.Params = glm::vec4(static_cast<float>(preMips - 1), 1.0f, 1.0f, 0.0f);
+        if (m_IblUBO) m_IblUBO->SetData(&ic, sizeof(ic));
+
+        ECHELON_LOG_INFO("Ray: IBL precomputed (env {} / irr {} / prefilter {} x{} mips / BRDF {})",
+                         envSize, irrSize, preSize, preMips, lutSize);
     }
 
     void RayRenderer::EnsureUpToDate() {
@@ -322,6 +775,11 @@ namespace Echelon {
         if (m_FlatShaderAsset)  m_FlatShaderAsset->UploadGPU(this);   // rebuild GL program if released
         if (m_ErrorShaderAsset) m_ErrorShaderAsset->UploadGPU(this);
         BuildDefaultPipeline();
+
+        // Rebuild shadow shaders/pipelines too (their GL programs may have been released).
+        if (m_ShadowDepthShader) { m_ShadowDepthShader->UploadGPU(this); m_ShadowDepthPipeline = BuildPipeline(m_Device, m_ShadowDepthPass, m_ShadowDepthShader, "Ray_ShadowDepthPipeline"); }
+        if (m_ShadowCubeShader)  { m_ShadowCubeShader->UploadGPU(this);  m_ShadowCubePipeline  = BuildPipeline(m_Device, m_ShadowCubePass,  m_ShadowCubeShader,  "Ray_ShadowCubePipeline"); }
+
         m_LastAssetEpoch = epoch;
     }
 
@@ -370,12 +828,38 @@ namespace Echelon {
             const ShaderReflection& refl = shader->GetReflection();
             auto set = m_Device->AllocateDescriptorSet(m_SystemLayout);
 
+            // System UBOs — resolved by name and bound only where the shader references
+            // them (Slang strips unused ones, so FindUBOBinding fails → skipped).
+            const std::pair<const char*, Ref<Buffer>> sysUBOs[] = {
+                { "g_Frame",      m_FrameUBO      },
+                { "g_Object",     m_ObjectUBO     },
+                { "g_Lights",     m_LightUBO      },
+                { "g_Shadows",    m_ShadowUBO     },
+                { "g_ShadowPass", m_ShadowPassUBO },
+                { "g_Ibl",        m_IblUBO        },
+            };
             uint32_t binding = 0;
-            if (FindUBOBinding(refl, "g_Frame", binding))  set->SetBuffer(binding, m_FrameUBO);
-            if (FindUBOBinding(refl, "g_Object", binding)) set->SetBuffer(binding, m_ObjectUBO);
-            if (FindUBOBinding(refl, "g_Lights", binding)) set->SetBuffer(binding, m_LightUBO); // lighting scaffold — bound only where present
-            set->Update();
+            for (const auto& [name, buf] : sysUBOs)
+                if (buf && FindUBOBinding(refl, name, binding))
+                    set->SetBuffer(binding, buf);
 
+            // System samplers — shadow maps (nearest/clamp) + IBL maps (linear/mip),
+            // bound at the reflected binding. Null until the shadow/IBL systems create
+            // them (Phases 5/6); a PBR shader guards its samples until then.
+            const Ref<Sampler> shadowSampler = m_ShadowSampler ? m_ShadowSampler : m_LinearSampler;
+            const std::tuple<const char*, Ref<Texture>, Ref<Sampler>> sysTextures[] = {
+                { "g_ShadowDir",     m_ShadowDirMap,   shadowSampler   },
+                { "g_ShadowSpot",    m_ShadowSpotMap,  shadowSampler   },
+                { "g_ShadowPoint",   m_ShadowPointMap, shadowSampler   },
+                { "g_IrradianceMap", m_IrradianceMap,  m_LinearSampler },
+                { "g_PrefilterMap",  m_PrefilterMap,   m_LinearSampler },
+                { "g_BrdfLUT",       m_BrdfLUT,        m_LinearSampler },
+            };
+            for (const auto& [name, tex, samp] : sysTextures)
+                if (tex && FindSamplerBinding(refl, name, binding))
+                    set->SetTexture(binding, tex, samp);
+
+            set->Update();
             it = m_SystemSets.emplace(shader.get(), set).first;
         }
         m_CommandBuffer->BindDescriptorSet(it->second, 0);
@@ -431,12 +915,16 @@ namespace Echelon {
         LightConstantsCPU lc;
         lc.Ambient = glm::vec4(0.03f, 0.03f, 0.03f, 1.0f);
 
+        // Reset shadow casters each scene; the first CastsShadows light of each type wins.
+        m_DirCaster = {}; m_SpotCaster = {}; m_PointCaster = {};
+
         if (auto registry = scene->GetEntityRegistry().lock()) {
             int count = 0;
             auto view = registry->view<LightComponent, TransformComponent>();
             for (auto entity : view) {
                 if (count >= ECHELON_MAX_LIGHTS) break;
                 const auto& light = view.get<LightComponent>(entity);
+                if (!light.Enabled) continue;   // soft-disabled lights contribute nothing
                 const auto& tc    = view.get<TransformComponent>(entity);
 
                 // Rotation (euler radians) → forward direction; default facing -Z.
@@ -450,7 +938,20 @@ namespace Echelon {
                 g.Position   = glm::vec4(tc.Position, static_cast<float>(light.Type));
                 g.Direction  = glm::vec4(dir, light.Range);
                 g.Color      = glm::vec4(light.Color, light.Intensity);
-                g.SpotParams = glm::vec4(light.InnerCone, light.OuterCone, 0.0f, 0.0f);
+                g.SpotParams = glm::vec4(light.CosInner(), light.CosOuter(), 0.0f, 0.0f);
+
+                // Record one shadow caster per light type (index into this g_Lights array).
+                if (light.CastsShadows) {
+                    if (light.Type == LightType::Directional && m_DirCaster.Index < 0) {
+                        m_DirCaster.Index = count; m_DirCaster.Direction = dir; m_DirCaster.Bias = light.ShadowBias;
+                    } else if (light.Type == LightType::Spot && m_SpotCaster.Index < 0) {
+                        m_SpotCaster.Index = count; m_SpotCaster.Position = tc.Position; m_SpotCaster.Direction = dir;
+                        m_SpotCaster.Range = light.Range; m_SpotCaster.CosOuter = light.CosOuter(); m_SpotCaster.Bias = light.ShadowBias;
+                    } else if (light.Type == LightType::Point && m_PointCaster.Index < 0) {
+                        m_PointCaster.Index = count; m_PointCaster.Position = tc.Position;
+                        m_PointCaster.Range = light.Range; m_PointCaster.Bias = light.ShadowBias;
+                    }
+                }
                 ++count;
             }
             lc.Count.x = count;
@@ -476,6 +977,11 @@ namespace Echelon {
         EnsureUpToDate();
 
         m_RenderGraph.Update(scene, GetDefaultPipeline(), GetErrorPipeline());
+
+        // Render this frame's shadow maps (dir/spot/point) into renderer-owned targets
+        // before the main graph, and upload g_Shadows. Runs outside the pass graph since
+        // the shadow-caster set is dynamic. No-op when no lights cast shadows.
+        RenderShadowMaps();
 
         // Execute the pass graph. Each pass opens its own render pass + framebuffer;
         // the "forward" pass calls back into ExecuteDrawList() to record the draws.

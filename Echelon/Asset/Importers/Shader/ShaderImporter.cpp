@@ -154,6 +154,26 @@ namespace Echelon {
                 s.Name    = p->getName() ? p->getName() : "";
                 s.Binding = p->getBindingIndex();
                 s.Set     = p->getBindingSpace();
+
+                // Capture the texture dimensionality from Slang's resource shape so the
+                // renderer binds the matching texture kind (2D vs cube vs array vs 3D).
+                if (kind == slang::TypeReflection::Kind::Resource) {
+                    if (slang::TypeReflection* type = tl->getType()) {
+                        const SlangResourceShape shape = type->getResourceShape();
+                        const SlangResourceShape base  =
+                            static_cast<SlangResourceShape>(shape & SLANG_RESOURCE_BASE_SHAPE_MASK);
+                        const bool isArray = (shape & SLANG_TEXTURE_ARRAY_FLAG) != 0;
+                        switch (base) {
+                            case SLANG_TEXTURE_CUBE: s.Dimension = SamplerDimension::TextureCube; break;
+                            case SLANG_TEXTURE_3D:   s.Dimension = SamplerDimension::Texture3D;   break;
+                            case SLANG_TEXTURE_2D:
+                                s.Dimension = isArray ? SamplerDimension::Texture2DArray
+                                                      : SamplerDimension::Texture2D;
+                                break;
+                            default:                 s.Dimension = SamplerDimension::Texture2D;   break;
+                        }
+                    }
+                }
                 refl.Samplers.push_back(std::move(s));
             }
         }

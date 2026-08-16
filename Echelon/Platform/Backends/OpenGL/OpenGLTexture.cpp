@@ -23,7 +23,11 @@ namespace Echelon {
 
         if (m_GLTarget == GL_TEXTURE_2D) {
             glTexStorage2D(m_GLTarget, m_MipLevels, internalFmt, m_Width, m_Height);
-        } else if (m_GLTarget == GL_TEXTURE_3D || m_GLTarget == GL_TEXTURE_2D_ARRAY) {
+        } else if (m_GLTarget == GL_TEXTURE_2D_ARRAY) {
+            // Array layer count lives in ArraySize; fall back to Depth for callers that set it there.
+            const uint32_t layers = std::max(1u, std::max(desc.ArraySize, desc.Depth));
+            glTexStorage3D(m_GLTarget, m_MipLevels, internalFmt, m_Width, m_Height, layers);
+        } else if (m_GLTarget == GL_TEXTURE_3D) {
             glTexStorage3D(m_GLTarget, m_MipLevels, internalFmt, m_Width, m_Height, m_Depth);
         } else if (m_GLTarget == GL_TEXTURE_CUBE_MAP) {
             glTexStorage2D(m_GLTarget, m_MipLevels, internalFmt, m_Width, m_Height);

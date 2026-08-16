@@ -60,13 +60,30 @@ namespace Echelon {
     };
 
     /**
+     * @brief Texture dimensionality of a reflected combined-image sampler.
+     *
+     * Slang reflection reports the resource "shape"; capturing it lets the renderer
+     * bind the correct texture kind (a SamplerCube must be fed a cubemap, a Sampler2D
+     * a 2D texture) instead of guessing by name. Needed for shadow cubemaps + IBL.
+     */
+    enum class SamplerDimension : uint8_t
+    {
+        Texture2D = 0,
+        TextureCube,
+        Texture2DArray,
+        Texture3D,
+        Unknown
+    };
+
+    /**
      * @brief A reflected texture/sampler resource.
      */
     struct ReflectedSampler
     {
-        std::string Name;
-        uint32_t    Binding = 0;   ///< SPIR-V binding index (maps to a GL texture unit).
-        uint32_t    Set     = 0;
+        std::string      Name;
+        uint32_t         Binding   = 0;   ///< SPIR-V binding index (maps to a GL texture unit).
+        uint32_t         Set       = 0;
+        SamplerDimension Dimension = SamplerDimension::Texture2D;  ///< 2D / Cube / Array / 3D (from Slang resource shape).
     };
 
     /**

@@ -1,0 +1,8 @@
+Material:
+  # Polished metal.
+  Shader: shader:PBR.slang
+  Params:
+    BaseColor: { Type: Float4, Value: [0.90, 0.91, 0.92, 1.0] }
+    Metallic:  { Type: Float,  Value: [1.0] }
+    Roughness: { Type: Float,  Value: [0.14] }
+    Occlusion: { Type: Float,  Value: [1.0] }

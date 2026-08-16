@@ -82,6 +82,7 @@ namespace Echelon {
         m_Order.clear();
         m_PassIndexByName.clear();
         m_ResourceProducers.clear();
+        m_ComputeResources.clear();
 
         if (!device) {
             ECHELON_LOG_ERROR("RenderPassGraph: no device");
@@ -123,6 +124,11 @@ namespace Echelon {
             };
             for (const auto& c : p.ColorOutputs) if (!record(c.Resource)) return false;
             if (p.DepthOutput)                    if (!record(p.DepthOutput->Resource)) return false;
+            // A compute pass "produces" the storage images it writes (its AsStorageImage
+            // inputs), so a later pass that samples them gets a real dependency edge.
+            if (p.Type == PassType::Compute)
+                for (const auto& in : p.Inputs)
+                    if (in.AsStorageImage && !record(in.Resource)) return false;
         }
 
         // ---- Edges + in-degrees (P depends on producer of each input) ----
@@ -130,6 +136,9 @@ namespace Echelon {
         std::vector<int> indeg(passes.size(), 0);
         for (size_t i = 0; i < passes.size(); ++i) {
             for (const auto& in : passes[i]->Inputs) {
+                // A compute pass's storage-image input is an OUTPUT it writes, not a read —
+                // it must not create a dependency on its own producer (or itself).
+                if (passes[i]->Type == PassType::Compute && in.AsStorageImage) continue;
                 if (IsBackbuffer(in.Resource)) {
                     ECHELON_LOG_ERROR("RenderPassGraph: pass '{}' cannot sample the backbuffer", passes[i]->Name);
                     return false;
@@ -212,6 +221,10 @@ namespace Echelon {
             }
             if (cp.Desc.DepthOutput)
                 m_ResourceProducers[cp.Desc.DepthOutput->Resource] = AttachmentLocation{ i, true, 0 };
+            if (cp.Desc.Type == PassType::Compute)
+                for (const auto& in : cp.Desc.Inputs)
+                    if (in.AsStorageImage)
+                        m_ResourceProducers[in.Resource] = AttachmentLocation{ i, false, 0 };
         }
 
         // ---- Resolve each pass's inputs to producing attachment locations ----
@@ -228,8 +241,10 @@ namespace Echelon {
             m_Order.clear();
             m_PassIndexByName.clear();
             m_ResourceProducers.clear();
+            m_ComputeResources.clear();
             return false;
         }
+        CreateComputeResources();
 
         ECHELON_LOG_INFO("RenderPassGraph: compiled {} pass(es) at {}x{}", m_Order.size(), m_Width, m_Height);
         for (const auto& cp : m_Order)
@@ -284,12 +299,39 @@ namespace Echelon {
         return true;
     }
 
+    // Standalone storage textures for resources a compute pass writes (and later passes
+    // sample). Unlike color/depth attachments these aren't owned by any framebuffer.
+    void RenderPassGraph::CreateComputeResources() {
+        m_ComputeResources.clear();
+        if (!m_Device) return;
+        for (const auto& cp : m_Order) {
+            if (cp.Desc.Type != PassType::Compute) continue;
+            for (const auto& in : cp.Desc.Inputs) {
+                if (!in.AsStorageImage || IsBackbuffer(in.Resource)) continue;
+                if (m_ComputeResources.count(in.Resource)) continue;
+
+                uint32_t w = m_Width, h = m_Height;
+                ResolveResourceSize(in.Resource, w, h);
+                TextureDesc td;
+                td.Type      = TextureType::StorageTexture;
+                td.Format    = ResourceFormat(m_Desc, in.Resource, TextureFormat::RGBA16_FLOAT);
+                td.Usage     = TextureUsage::Storage | TextureUsage::Sampled;
+                td.Width     = w;
+                td.Height    = h;
+                td.DebugName = "PassGraphCompute_" + in.Resource;
+                m_ComputeResources[in.Resource] = m_Device->CreateTexture(td);
+            }
+        }
+    }
+
     void RenderPassGraph::Resize(uint32_t width, uint32_t height) {
         if (width == m_Width && height == m_Height) return;
         m_Width  = width;
         m_Height = height;
-        if (!m_Order.empty())
+        if (!m_Order.empty()) {
             CreateFramebuffers();
+            CreateComputeResources();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -315,12 +357,19 @@ namespace Echelon {
             ctx.Height = cp.Height;
 
             ctx.InputTextures.reserve(cp.Inputs.size());
-            for (const auto& loc : cp.Inputs) {
-                const auto& producer = m_Order[loc.PassIndex];
-                Ref<Texture> tex = producer.FB
-                    ? (loc.IsDepth ? producer.FB->GetDepthAttachment()
-                                   : producer.FB->GetColorAttachment(loc.ColorIndex))
-                    : nullptr;
+            for (size_t k = 0; k < cp.Inputs.size(); ++k) {
+                const std::string& resName = cp.Desc.Inputs[k].Resource;
+                Ref<Texture> tex;
+                if (auto cit = m_ComputeResources.find(resName); cit != m_ComputeResources.end()) {
+                    tex = cit->second;   // standalone storage texture written by a compute pass
+                } else {
+                    const auto& loc = cp.Inputs[k];
+                    const auto& producer = m_Order[loc.PassIndex];
+                    tex = producer.FB
+                        ? (loc.IsDepth ? producer.FB->GetDepthAttachment()
+                                       : producer.FB->GetColorAttachment(loc.ColorIndex))
+                        : nullptr;
+                }
                 ctx.InputTextures.push_back(tex);
             }
 
@@ -360,6 +409,8 @@ namespace Echelon {
     }
 
     Ref<Texture> RenderPassGraph::GetOutput(const std::string& resourceName) const {
+        if (auto cit = m_ComputeResources.find(resourceName); cit != m_ComputeResources.end())
+            return cit->second;
         auto it = m_ResourceProducers.find(resourceName);
         if (it == m_ResourceProducers.end()) return nullptr;
         const auto& loc = it->second;

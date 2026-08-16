@@ -51,38 +51,43 @@ namespace Echelon {
         RegisterImporter(CreateRef<RenderPipelineImporter>());
 
         // Procedural built-in shapes ("internal shape repository").
-        RegisterPrimitive("Cube", []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
+        RegisterPrimitive("Cube",   []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
+        RegisterPrimitive("Plane",  []() -> Ref<Asset> { return MeshPrimitives::CreatePlane(); });
+        RegisterPrimitive("Sphere", []() -> Ref<Asset> { return MeshPrimitives::CreateSphere(); });
 
         // Built-in default material — backed by whatever shader the active renderer
-        // declares as its default.  Resolved lazily so the renderer is guaranteed
-        // to be initialised before this lambda first runs.
+        // declares as its default (now PBR.slang). Resolved lazily so the renderer is
+        // guaranteed to be initialised before this lambda first runs. PBR requires its
+        // params to be set (unset members zero-fill → black/occluded), so seed sane ones.
         RegisterPrimitive("DefaultMaterial", []() -> Ref<Asset> {
             auto mat = CreateRef<Material>();
             if (auto* r = Renderer::Get().GetActive())
                 mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / r->GetDefaultShaderName()).string();
+            mat->Params["BaseColor"] = MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+            mat->Params["Metallic"]  = MaterialParam::Make(0.0f);
+            mat->Params["Roughness"] = MaterialParam::Make(0.6f);
+            mat->Params["Occlusion"] = MaterialParam::Make(1.0f);
             return mat;
         });
 
-        // Widely-used built-in materials backed by the renderer's stock shaders
+        // Widely-used built-in materials, all backed by the standard PBR shader
         // (shipped next to the executable). Projects reference these by name
-        // (MaterialSource: "Albedo" / "Textured") or author .ehmaterial files that
-        // use `shader:Albedo.slang` / `shader:Textured.slang` with their own params.
-        RegisterPrimitive("Albedo", []() -> Ref<Asset> {
+        // (MaterialSource: "PBR" / "Albedo" / "Textured") or author .ehmaterial files
+        // that use `shader:PBR.slang` with their own params.
+        auto makePbr = [](glm::vec4 baseColor, float metallic, float roughness, bool useAlbedoMap) {
             auto mat = CreateRef<Material>();
-            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Albedo.slang").string();
-            mat->Params["AlbedoColor"] = MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
-            mat->Params["Roughness"]   = MaterialParam::Make(0.5f);
-            mat->Params["Metallic"]    = MaterialParam::Make(0.0f);
+            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "PBR.slang").string();
+            mat->Params["BaseColor"]    = MaterialParam::Make(baseColor);
+            mat->Params["Metallic"]     = MaterialParam::Make(metallic);
+            mat->Params["Roughness"]    = MaterialParam::Make(roughness);
+            mat->Params["Occlusion"]    = MaterialParam::Make(1.0f);
+            mat->Params["NormalScale"]  = MaterialParam::Make(1.0f);
+            if (useAlbedoMap) mat->Params["UseAlbedoMap"] = MaterialParam::Make(1.0f);
             return mat;
-        });
-        RegisterPrimitive("Textured", []() -> Ref<Asset> {
-            auto mat = CreateRef<Material>();
-            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "Textured.slang").string();
-            mat->Params["AlbedoColor"] = MaterialParam::Make(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-            mat->Params["Roughness"]   = MaterialParam::Make(0.5f);
-            mat->Params["Metallic"]    = MaterialParam::Make(0.0f);
-            return mat;   // no texture assigned → 1x1 white fallback until a project sets one
-        });
+        };
+        RegisterPrimitive("PBR",      [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), 0.0f, 0.5f, false); });
+        RegisterPrimitive("Albedo",   [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), 0.0f, 0.5f, false); });
+        RegisterPrimitive("Textured", [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), 0.0f, 0.5f, true);  });
 
         // Rebuild GPU resources whenever the active renderer (back-end) changes.
         m_RendererListener = Renderer::Get().AddChangeListener(

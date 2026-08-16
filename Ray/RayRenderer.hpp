@@ -21,6 +21,8 @@
 #include "Echelon/Renderer/RenderPassGraph.hpp"
 #include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
 #include "Echelon/GraphicsAPI/Device.hpp"
+#include "Echelon/GraphicsAPI/Texture.hpp"
+#include "Echelon/GraphicsAPI/Framebuffer.hpp"
 #include "Echelon/Asset/Shader/ShaderAsset.hpp"
 
 #include <string>
@@ -76,7 +78,7 @@ namespace Echelon {
         Ref<Pipeline> GetDefaultPipeline() const override { return m_FlatPipeline; }
         Ref<Pipeline> GetErrorPipeline()   const override { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
         Ref<RenderPass> GetScenePass()     const override { return m_PassGraph.GetRenderPass("forward"); }
-        const char*   GetDefaultShaderName() const override { return "Flat.slang"; }
+        const char*   GetDefaultShaderName() const override { return "PBR.slang"; }
 
         // ---- Queries ----
         RendererInfo GetInfo() const override;
@@ -118,6 +120,18 @@ namespace Echelon {
         /** @brief Get/build+cache the compute pipeline for a compute pass. */
         Ref<ComputePipeline> GetComputePipeline(const std::string& passName, const std::string& shaderName);
 
+        /** @brief Create the renderer-owned shadow textures/passes/framebuffers/pipelines (once). */
+        void CreateShadowResources();
+
+        /** @brief Render this frame's shadow maps (dir/spot/point) and upload g_Shadows. */
+        void RenderShadowMaps();
+
+        /** @brief Draw all scene geometry through a depth/distance pipeline (shadow passes). */
+        void RenderSceneDepth(const Ref<Pipeline>& pipeline);
+
+        /** @brief Precompute IBL (procedural sky → env cube → irradiance + prefilter + BRDF LUT), once. */
+        void PrecomputeIBL();
+
         bool m_Initialized = false;
 
         uint32_t m_ViewportWidth  = 0;
@@ -144,8 +158,47 @@ namespace Echelon {
         Ref<Buffer>              m_FrameUBO;    ///< FrameConstants — written once per frame.
         Ref<Buffer>              m_ObjectUBO;   ///< ObjectConstants — rewritten per draw.
         Ref<Buffer>              m_LightUBO;    ///< LightConstants — gathered once per scene (lighting scaffold).
+        Ref<Buffer>              m_ShadowUBO;   ///< ShadowConstants — light matrices + shadow params (g_Shadows).
+        Ref<Buffer>              m_ShadowPassUBO;///< ShadowPassConstants — per-view light VP for the depth pass (g_ShadowPass).
+        Ref<Buffer>              m_IblUBO;      ///< IblConstants — IBL params (g_Ibl).
         int                      m_LastLightCount = -1;  ///< diagnostic: log when the gathered light count changes
         Ref<DescriptorSetLayout> m_SystemLayout;
+
+        // ---- Shadow maps + IBL maps (renderer-owned; created lazily, bound by name on the system set) ----
+        Ref<Texture> m_ShadowDirMap;     ///< directional depth map (D32F 2D)
+        Ref<Texture> m_ShadowSpotMap;    ///< spot depth map (D32F 2D)
+        Ref<Texture> m_ShadowPointMap;   ///< point light distance cubemap (R32F cube)
+        Ref<Texture> m_ShadowPointDepth; ///< scratch depth for the cube faces (D32F 2D, reused per face)
+        Ref<Texture> m_EnvCube;          ///< procedural-sky environment cube (IBL source)
+        Ref<Texture> m_IrradianceMap;    ///< diffuse IBL cube
+        Ref<Texture> m_PrefilterMap;     ///< specular IBL cube (roughness mips)
+        Ref<Texture> m_BrdfLUT;          ///< split-sum BRDF LUT (2D)
+        Ref<Sampler> m_ShadowSampler;    ///< nearest/clamp sampler for shadow-map reads
+
+        // Renderer-owned shadow passes/framebuffers/pipelines (outside the .ehpipeline graph,
+        // since shadow-caster count is dynamic). Rendered each frame before the pass graph.
+        Ref<RenderPass>  m_ShadowDepthPass;      ///< depth-only pass (directional + spot)
+        Ref<RenderPass>  m_ShadowCubePass;       ///< R32F distance + depth pass (point faces)
+        Ref<Framebuffer> m_ShadowDirFB;
+        Ref<Framebuffer> m_ShadowSpotFB;
+        Ref<Framebuffer> m_ShadowPointFB[6];     ///< one per cubemap face
+        Ref<ShaderAsset> m_ShadowDepthShader;
+        Ref<ShaderAsset> m_ShadowCubeShader;
+        Ref<Pipeline>    m_ShadowDepthPipeline;
+        Ref<Pipeline>    m_ShadowCubePipeline;
+        uint32_t         m_ShadowRes      = 2048;   ///< directional/spot map resolution
+        uint32_t         m_PointShadowRes = 1024;   ///< point cubemap face resolution
+
+        /// One shadow caster per light type, recorded during BeginScene (index into g_Lights).
+        struct ShadowCasterInfo {
+            int       Index = -1;
+            glm::vec3 Position{ 0.0f };
+            glm::vec3 Direction{ 0.0f, -1.0f, 0.0f };
+            float     Range    = 10.0f;
+            float     CosOuter = 0.8f;
+            float     Bias     = 0.0015f;
+        };
+        ShadowCasterInfo m_DirCaster, m_SpotCaster, m_PointCaster;
 
         // One system descriptor set per shader — g_Frame/g_Object bindings are
         // assigned per-shader, so a shared set would leave stale bindings that could
