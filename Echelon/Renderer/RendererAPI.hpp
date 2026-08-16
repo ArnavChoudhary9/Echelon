@@ -240,6 +240,18 @@ namespace Echelon {
         virtual Ref<Pipeline> GetErrorPipeline() const = 0;
 
         /**
+         * @brief The render pass that scene geometry is drawn into (the "forward"
+         *        pass of the active pass graph).
+         *
+         * Pipelines that draw scene meshes (materials, default, error) should be
+         * created compatible with this pass. Default is null for renderers without
+         * a pass graph; OpenGL ignores pass compatibility, so null is harmless there.
+         *
+         * @return Ref<RenderPass> or nullptr.
+         */
+        virtual Ref<RenderPass> GetScenePass() const { return nullptr; }
+
+        /**
          * @brief Filename of the renderer's default shader (e.g. "Flat.slang").
          *
          * The engine uses this to register the "DefaultMaterial" primitive without

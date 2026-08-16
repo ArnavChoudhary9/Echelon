@@ -37,6 +37,8 @@ namespace Echelon {
                        uint64_t offset = 0, uint64_t range = 0) override;
         void SetTexture(uint32_t binding, const Ref<Texture>& texture,
                         const Ref<Sampler>& sampler) override;
+        void SetStorageTexture(uint32_t binding, const Ref<Texture>& texture,
+                               uint32_t mipLevel = 0) override;
         void Update() override;
 
         /** @brief Apply all bindings to the current GL state. */
@@ -54,9 +56,15 @@ namespace Echelon {
             Ref<Sampler> sampler;   ///< Applied as per-texture glTexParameter* state at Bind().
         };
 
-        Ref<OpenGLDescriptorSetLayout>               m_Layout;
-        std::unordered_map<uint32_t, BufferBinding>  m_Buffers;
-        std::unordered_map<uint32_t, TextureBinding> m_Textures;
+        struct StorageImageBinding {
+            Ref<Texture> texture;
+            uint32_t     mipLevel = 0;
+        };
+
+        Ref<OpenGLDescriptorSetLayout>                    m_Layout;
+        std::unordered_map<uint32_t, BufferBinding>       m_Buffers;
+        std::unordered_map<uint32_t, TextureBinding>      m_Textures;
+        std::unordered_map<uint32_t, StorageImageBinding> m_StorageImages;
     };
 
 } // namespace Echelon

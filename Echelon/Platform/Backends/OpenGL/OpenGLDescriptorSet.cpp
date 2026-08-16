@@ -1,6 +1,7 @@
 #include "OpenGLDescriptorSet.hpp"
 #include "OpenGLBuffer.hpp"
 #include "OpenGLTexture.hpp"
+#include "OpenGLUtils.hpp"
 
 namespace Echelon {
 
@@ -36,6 +37,12 @@ namespace Echelon {
         m_Textures[binding] = { texture, sampler };
     }
 
+    void OpenGLDescriptorSet::SetStorageTexture(uint32_t binding, const Ref<Texture>& texture,
+                                                uint32_t mipLevel)
+    {
+        m_StorageImages[binding] = { texture, mipLevel };
+    }
+
     void OpenGLDescriptorSet::Update()
     {
         // OpenGL applies bindings at Bind() time — nothing to batch here
@@ -69,6 +76,16 @@ namespace Echelon {
 
             if (auto glSampler = std::static_pointer_cast<OpenGLSampler>(tb.sampler))
                 glSampler->Apply(glTex->GetGLTarget(), glTex->GetMipLevels() > 1);
+        }
+
+        // Bind storage images (compute image load/store) via glBindImageTexture.
+        for (const auto& [binding, sb] : m_StorageImages) {
+            auto glTex = std::static_pointer_cast<OpenGLTexture>(sb.texture);
+            if (!glTex) continue;
+
+            const GLenum internalFmt = OpenGLUtils::ToGLInternalFormat(glTex->GetFormat());
+            glBindImageTexture(binding, glTex->GetHandle(), static_cast<GLint>(sb.mipLevel),
+                               GL_FALSE, 0, GL_READ_WRITE, internalFmt);
         }
     }
 

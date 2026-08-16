@@ -1,0 +1,30 @@
+RenderPipeline:
+  resources:
+    - { name: hdr,   format: RGBA16_FLOAT, size: swapchain }
+    - { name: depth, format: D32_FLOAT,    size: swapchain }
+    - { name: ldr,   format: RGBA8_UNORM,  size: swapchain }
+  passes:
+    # 1) Scene → offscreen HDR color (+ depth).
+    - name: forward
+      type: graphics
+      color:
+        - { resource: hdr, load: clear, store: store, clear: [0.1, 0.1, 0.12, 1.0] }
+      depth: { resource: depth, load: clear, store: dontcare }
+
+    # 2) Color/exposure pass (gentle — content is display-referred LDR) → offscreen LDR.
+    - name: tonemap
+      type: fullscreen
+      shader: Tonemap.slang
+      inputs:
+        - { resource: hdr, binding: 0 }
+      color:
+        - { resource: ldr, load: dontcare, store: store }
+
+    # 3) FXAA anti-aliasing → backbuffer.
+    - name: fxaa
+      type: fullscreen
+      shader: FXAA.slang
+      inputs:
+        - { resource: ldr, binding: 0 }
+      color:
+        - { resource: "$backbuffer", load: dontcare, store: store }

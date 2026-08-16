@@ -129,6 +129,21 @@ namespace Echelon {
                                 const Ref<Sampler>& sampler) = 0;
 
         /**
+         * @brief Bind a texture as a read/write storage image (compute image load/store).
+         *
+         * Unlike SetTexture (a sampled, filtered texture), this exposes the texture's
+         * texels directly to a compute shader's RWTexture/image binding. The binding
+         * index must match the shader's declared image binding. Default is a no-op for
+         * backends without storage-image support.
+         *
+         * @param binding  The image binding index within the set.
+         * @param texture  The texture to expose as a storage image.
+         * @param mipLevel The mip level to bind.
+         */
+        virtual void SetStorageTexture(uint32_t /*binding*/, const Ref<Texture>& /*texture*/,
+                                       uint32_t /*mipLevel*/ = 0) {}
+
+        /**
          * @brief Flush / update the descriptor set after changing bindings.
          *
          * Some backends batch descriptor writes and require an explicit update

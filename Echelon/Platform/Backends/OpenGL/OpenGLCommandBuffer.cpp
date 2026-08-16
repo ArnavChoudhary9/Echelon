@@ -145,7 +145,12 @@ namespace Echelon {
                                         uint32_t groupCountZ)
     {
         glDispatchCompute(groupCountX, groupCountY, groupCountZ);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        // Make compute writes (SSBOs and storage images) visible to subsequent
+        // sampling, image access, and framebuffer reads in later passes.
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT
+                        | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+                        | GL_TEXTURE_FETCH_BARRIER_BIT
+                        | GL_FRAMEBUFFER_BARRIER_BIT);
     }
 
     void OpenGLCommandBuffer::SetViewport(const Viewport& viewport)

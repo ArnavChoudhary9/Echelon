@@ -36,26 +36,29 @@ namespace Echelon {
         Scene,
         Shader,
         Material,
-        Texture
+        Texture,
+        RenderPipeline
     };
 
     inline const char* AssetTypeToString(AssetType type) {
         switch (type) {
-            case AssetType::Mesh:     return "Mesh";
-            case AssetType::Scene:    return "Scene";
-            case AssetType::Shader:   return "Shader";
-            case AssetType::Material: return "Material";
-            case AssetType::Texture:  return "Texture";
-            default:                  return "None";
+            case AssetType::Mesh:           return "Mesh";
+            case AssetType::Scene:          return "Scene";
+            case AssetType::Shader:         return "Shader";
+            case AssetType::Material:       return "Material";
+            case AssetType::Texture:        return "Texture";
+            case AssetType::RenderPipeline: return "RenderPipeline";
+            default:                        return "None";
         }
     }
 
     inline AssetType AssetTypeFromString(std::string_view s) {
-        if (s == "Mesh")     return AssetType::Mesh;
-        if (s == "Scene")    return AssetType::Scene;
-        if (s == "Shader")   return AssetType::Shader;
-        if (s == "Material") return AssetType::Material;
-        if (s == "Texture")  return AssetType::Texture;
+        if (s == "Mesh")           return AssetType::Mesh;
+        if (s == "Scene")          return AssetType::Scene;
+        if (s == "Shader")         return AssetType::Shader;
+        if (s == "Material")       return AssetType::Material;
+        if (s == "Texture")        return AssetType::Texture;
+        if (s == "RenderPipeline") return AssetType::RenderPipeline;
         return AssetType::None;
     }
 

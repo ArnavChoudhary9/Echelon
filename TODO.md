@@ -4,3 +4,4 @@
 - [x] mesh data must not be shader dependent.
 - [ ] Custom Assets for building and compression.
 - [ ] Logger for Renderer.
+- [ ] anti aliasing

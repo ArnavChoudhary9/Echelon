@@ -81,6 +81,7 @@ namespace Echelon {
         pd.Depth.DepthTestEnable  = true;
         pd.Depth.DepthWriteEnable = true;
         pd.Raster.Cull            = CullMode::None;
+        pd.Pass          = renderer->GetScenePass();   // compatible with the scene ("forward") pass
         pd.DebugName     = "Material_Pipeline";
         m_Pipeline = device->CreatePipeline(pd);
 

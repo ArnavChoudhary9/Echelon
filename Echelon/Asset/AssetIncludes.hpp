@@ -28,6 +28,10 @@
 #include "Asset/Material/Material.hpp"
 #include "Asset/Material/MaterialInstance.hpp"
 
+// ---- Render Pipeline (multipass pass graph) ----
+#include "Asset/RenderPipeline/RenderPipelineDesc.hpp"
+#include "Asset/RenderPipeline/RenderPipelineAsset.hpp"
+
 // ---- Importers ----
 #include "Asset/Importers/ImportContext.hpp"
 #include "Asset/Importers/ImportResult.hpp"
@@ -37,3 +41,4 @@
 #include "Asset/Importers/Shader/ShaderImporter.hpp"
 #include "Asset/Importers/Material/MaterialImporter.hpp"
 #include "Asset/Importers/Texture/TextureImporter.hpp"
+#include "Asset/Importers/RenderPipeline/RenderPipelineImporter.hpp"
