@@ -2,6 +2,12 @@
 
 #include "Echelon/Echelon.hpp"
 
+#include "imgui.h"
+#include "imgui_internal.h"   // DockBuilder* for the first-run default layout
+
+#include <entt/entt.hpp>
+#include <cstdint>
+
 using namespace Echelon;
 
 class EditorOverlay : public Overlay {
@@ -26,6 +32,10 @@ public:
 
         auto* renderer = Renderer::Get().GetActive();
         renderer->SetVSync(false);
+
+        // Present the scene inside the ImGui "Viewport" panel: render the pass graph
+        // into an offscreen texture instead of the window backbuffer.
+        renderer->SetViewportTarget(true);
 
         // ---- Initialize editor camera ----
         m_EditorCamera.SetPerspective(60.0f, 0.1f, 1000.0f);
@@ -64,12 +74,14 @@ public:
             };
 
             addMesh("Ground",          "Plane",             "Materials/Ground.ehmaterial",   { 0, 0, 0 },          { 30, 1, 30 });
+            // Spheres: solid materials from metallic (left) to rough (right).
             addMesh("Sphere_Metal",    "Sphere",            "Materials/Metal.ehmaterial",    { -6, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
             addMesh("Sphere_Gold",     "Sphere",            "Materials/Gold.ehmaterial",     { -3, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
             addMesh("Sphere_Plastic",  "Sphere",            "Materials/Plastic.ehmaterial",  {  0, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
             addMesh("Sphere_Orange",   "Sphere",            "Materials/Orange.ehmaterial",   {  3, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
-            addMesh("Sphere_Textured", "Sphere",            "Materials/Lit.ehmaterial",      {  6, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
-            addMesh("Cube",            "Cube",              "Materials/Metal.ehmaterial",    { -2.5f, 0.6f, 3 },   { 1.2f, 1.2f, 1.2f }, { 0, 25, 0 });
+            addMesh("Sphere_Rough",    "Sphere",            "Materials/Rough.ehmaterial",    {  6, 0.6f, -1 },     { 1.2f, 1.2f, 1.2f });
+            // Cube carries the albedo texture (Lit).
+            addMesh("Cube",            "Cube",              "Materials/Lit.ehmaterial",      { -2.5f, 0.6f, 3 },   { 1.2f, 1.2f, 1.2f }, { 0, 25, 0 });
             addMesh("Monkey",          "Meshs/Monkey.obj",  "Materials/Orange.ehmaterial",   {  2.5f, 1.0f, 3 },   { 1, 1, 1 },          { 0, -35, 0 });
 
             {
@@ -114,6 +126,10 @@ public:
 
     virtual void OnUpdate(float deltaTime) override {
         ECHELON_PROFILE_FUNCTION();
+        m_LastDeltaTime = deltaTime;
+
+        // ---- Match the render target to the Viewport panel size (set last frame) ----
+        SyncViewportSize();
 
         if (m_IsPlaying) {
             // Animate entities in play mode
@@ -126,15 +142,18 @@ public:
                 }
             }
         } else {
-            // ---- Editor camera — all controls gated on Left Alt ----
+            // ---- Editor camera. Mouse controls act only while the Viewport is hovered;
+            //      the fly keys act while it is focused (so panning the mouse onto a
+            //      panel doesn't keep flying). All gated on Left Alt as before. ----
             float dx = m_MouseDeltaX;
             float dy = m_MouseDeltaY;
             m_MouseDeltaX = 0.0f;
             m_MouseDeltaY = 0.0f;
 
-            if (Input::IsKeyPressed(Key::LeftAlt)) {
-                float speed    = m_MoveSpeed * (Input::IsKeyPressed(Key::LeftShift) ? 4.0f : 1.0f);
-                float panSpeed = 0.015f       * (Input::IsKeyPressed(Key::LeftShift) ? 4.0f : 1.0f);
+            const bool altHeld = Input::IsKeyPressed(Key::LeftAlt);
+
+            if (altHeld && m_ViewportHovered) {
+                float panSpeed = 0.015f * (Input::IsKeyPressed(Key::LeftShift) ? 4.0f : 1.0f);
 
                 // LMB + Alt → look (pan/tilt)
                 if (Input::IsMouseButtonPressed(Mouse::ButtonLeft)) {
@@ -153,10 +172,13 @@ public:
                 // Scroll + Alt → dolly (zoom)
                 if (m_ScrollDelta != 0.0f) {
                     m_EditorPos += m_EditorCamera.GetForward() * m_ScrollDelta * m_MoveSpeed * 0.35f;
-                    m_ScrollDelta = 0.0f;
                 }
+            }
+            m_ScrollDelta = 0.0f;
 
-                // WASD + Alt → fly through scene (Q/E for world-up/down)
+            // WASD + Alt → fly through scene (Q/E for world-up/down); needs viewport focus.
+            if (altHeld && m_ViewportFocused) {
+                float speed = m_MoveSpeed * (Input::IsKeyPressed(Key::LeftShift) ? 4.0f : 1.0f);
                 glm::vec3 move(0.0f);
                 if (Input::IsKeyPressed(Key::W)) move += m_EditorCamera.GetForward();
                 if (Input::IsKeyPressed(Key::S)) move -= m_EditorCamera.GetForward();
@@ -217,9 +239,10 @@ public:
     virtual void OnEvent(Event& event) override {
         EventDispatcher dispatcher(event);
 
-        // Accumulate mouse delta — only while Alt is held to avoid snap on press
+        // Accumulate mouse delta — only while Alt is held AND the mouse is over the
+        // Viewport panel, so dragging on ImGui panels never moves the camera.
         dispatcher.Dispatch<MouseMovedEvent>([this](MouseMovedEvent& e) {
-            if (!m_IsPlaying && Input::IsKeyPressed(Key::LeftAlt)) {
+            if (!m_IsPlaying && m_ViewportHovered && Input::IsKeyPressed(Key::LeftAlt)) {
                 m_MouseDeltaX += e.GetX() - m_LastMouseX;
                 m_MouseDeltaY += e.GetY() - m_LastMouseY;
             }
@@ -228,40 +251,217 @@ public:
             return false;
         });
 
-        // Accumulate scroll delta — only while Alt is held
+        // Accumulate scroll delta — only while Alt is held and over the Viewport.
         dispatcher.Dispatch<MouseScrolledEvent>([this](MouseScrolledEvent& e) {
-            if (!m_IsPlaying && Input::IsKeyPressed(Key::LeftAlt))
+            if (!m_IsPlaying && m_ViewportHovered && Input::IsKeyPressed(Key::LeftAlt))
                 m_ScrollDelta += e.GetYOffset();
             return false;
         });
 
-        // P key toggles play / edit mode
+        // P key toggles play / edit mode (only when the viewport has focus so it does
+        // not fire while typing in another panel).
         dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& e) {
-            if (e.GetKeyCode() == Key::P && e.GetRepeatCount() == 0)
+            if (m_ViewportFocused && e.GetKeyCode() == Key::P && e.GetRepeatCount() == 0)
                 m_IsPlaying = !m_IsPlaying;
-            return false;
-        });
-
-        dispatcher.Dispatch<WindowResizeEvent>([this](WindowResizeEvent& e) {
-            Renderer::Get().OnResize(e.GetWidth(), e.GetHeight());
-            m_EditorCamera.SetViewportSize(e.GetWidth(), e.GetHeight());
-            auto registry = m_Scene->GetEntityRegistry().lock();
-            if (registry) {
-                auto camView = registry->view<CameraComponent>();
-                for (auto&& [entity, cc] : camView.each()) {
-                    if (!cc.FixedAspect)
-                        cc.Cam.SetViewportSize(e.GetWidth(), e.GetHeight());
-                }
-            }
             return false;
         });
     }
 
-    virtual void OnImGUIBegin()  override {}
-    virtual void OnImGUIRender() override {}
-    virtual void OnImGUIEnd()    override {}
+    // ------------------------------------------------------------------
+    // ImGui — the whole editor window is a dockspace hosting a scene viewport
+    // ------------------------------------------------------------------
+
+    virtual void OnImGUIBegin() override {
+        // Fullscreen host window that owns the dockspace covering the entire window.
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->WorkPos);
+        ImGui::SetNextWindowSize(vp->WorkSize);
+        ImGui::SetNextWindowViewport(vp->ID);
+
+        ImGuiWindowFlags hostFlags =
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoResize   | ImGuiWindowFlags_NoMove     |
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+            ImGuiWindowFlags_NoDocking  | ImGuiWindowFlags_MenuBar;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin("Echelon##DockSpaceHost", nullptr, hostFlags);
+        ImGui::PopStyleVar(3);
+
+        if (ImGui::BeginMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
+                    if (auto project = Application::Get().GetProject()) project->SaveScene();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Exit")) Application::Get().Close();
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("View")) {
+                ImGui::MenuItem("Hierarchy", nullptr, &m_ShowHierarchy);
+                ImGui::MenuItem("Inspector", nullptr, &m_ShowInspector);
+                ImGui::MenuItem("Stats",     nullptr, &m_ShowStats);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
+        }
+
+        const ImGuiID dockspaceId = ImGui::GetID("EchelonDockSpace");
+
+        // Build a sensible default layout the first time — but only if nothing was
+        // restored from imgui.ini. This must run BEFORE DockSpace(), which itself
+        // creates the node (so checking existence afterwards would always find one).
+        if (!m_DockLayoutInit) {
+            m_DockLayoutInit = true;
+            if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr)
+                BuildDefaultDockLayout(dockspaceId);
+        }
+
+        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+
+        ImGui::End();   // host window (dockspace only; panels are separate windows below)
+    }
+
+    virtual void OnImGUIRender() override {
+        DrawViewportPanel();
+        if (m_ShowHierarchy) DrawHierarchyPanel();
+        if (m_ShowInspector) DrawInspectorPanel();
+        if (m_ShowStats)     DrawStatsPanel();
+    }
+
+    virtual void OnImGUIEnd() override {}
 
 private:
+    // ---- Viewport panel: the scene, rendered into an offscreen texture ----
+    void DrawViewportPanel() {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin("Viewport");
+
+        m_ViewportFocused = ImGui::IsWindowFocused();
+        m_ViewportHovered = ImGui::IsWindowHovered();
+
+        const ImVec2 avail = ImGui::GetContentRegionAvail();
+        m_ViewportSize = { avail.x, avail.y };
+
+        auto* renderer = Renderer::Get().GetActive();
+        Ref<Texture> tex = renderer ? renderer->GetViewportTexture() : nullptr;
+        if (tex && avail.x > 0.0f && avail.y > 0.0f) {
+            // GL textures have their origin at the bottom-left, so flip V.
+            ImGui::Image(static_cast<ImTextureID>(tex->GetNativeHandle()),
+                         avail, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        } else {
+            ImGui::TextUnformatted("No viewport texture");
+        }
+
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
+
+    // ---- Scene hierarchy: list + select entities ----
+    void DrawHierarchyPanel() {
+        ImGui::Begin("Hierarchy", &m_ShowHierarchy);
+        auto registry = m_Scene ? m_Scene->GetEntityRegistry().lock() : nullptr;
+        if (registry) {
+            auto view = registry->view<TagComponent>();
+            for (auto entity : view) {
+                const auto& tag = view.get<TagComponent>(entity);
+                const bool selected = (entity == m_Selected);
+                ImGui::PushID(static_cast<int>(entt::to_integral(entity)));
+                if (ImGui::Selectable(tag.Tag.c_str(), selected))
+                    m_Selected = entity;
+                ImGui::PopID();
+            }
+            if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                && !ImGui::IsAnyItemHovered())
+                m_Selected = entt::null;   // click empty space to deselect
+        }
+        ImGui::End();
+    }
+
+    // ---- Inspector: edit the selected entity's transform ----
+    void DrawInspectorPanel() {
+        ImGui::Begin("Inspector", &m_ShowInspector);
+        auto registry = m_Scene ? m_Scene->GetEntityRegistry().lock() : nullptr;
+        if (registry && m_Selected != entt::null && registry->valid(m_Selected)) {
+            if (auto* tag = registry->try_get<TagComponent>(m_Selected))
+                ImGui::Text("%s", tag->Tag.c_str());
+            ImGui::Separator();
+            if (auto* t = registry->try_get<TransformComponent>(m_Selected)) {
+                ImGui::DragFloat3("Position", &t->Position.x, 0.05f);
+                ImGui::DragFloat3("Rotation", &t->Rotation.x, 0.25f);
+                ImGui::DragFloat3("Scale",    &t->Scale.x,    0.05f);
+            }
+            if (auto* l = registry->try_get<LightComponent>(m_Selected)) {
+                ImGui::Separator();
+                ImGui::ColorEdit3("Light Color", &l->Color.x);
+                ImGui::DragFloat("Intensity", &l->Intensity, 0.1f, 0.0f, 1000.0f);
+            }
+        } else {
+            ImGui::TextUnformatted("No entity selected");
+        }
+        ImGui::End();
+    }
+
+    // ---- Stats / controls ----
+    void DrawStatsPanel() {
+        ImGui::Begin("Stats", &m_ShowStats);
+        ImGui::Text("%.1f FPS (%.2f ms)", m_LastDeltaTime > 0.0f ? 1.0f / m_LastDeltaTime : 0.0f,
+                    m_LastDeltaTime * 1000.0f);
+        if (auto* renderer = Renderer::Get().GetActive()) {
+            const RenderStats s = renderer->GetStats();
+            ImGui::Text("Draw calls: %u", s.DrawCalls);
+        }
+        ImGui::Separator();
+        ImGui::Text("Mode: %s", m_IsPlaying ? "Play" : "Edit");
+        ImGui::Text("Viewport: %.0f x %.0f", m_ViewportSize.x, m_ViewportSize.y);
+        ImGui::Text("Cam: %.1f, %.1f, %.1f", m_EditorPos.x, m_EditorPos.y, m_EditorPos.z);
+        ImGui::Separator();
+        ImGui::TextWrapped("Hover the Viewport + hold Left Alt: LMB look, MMB pan, "
+                           "scroll dolly. Focus it + Alt: WASD/QE fly. P toggles play.");
+        ImGui::End();
+    }
+
+    // One-time default dock layout: Hierarchy left, Inspector/Stats right, Viewport center.
+    void BuildDefaultDockLayout(ImGuiID dockspaceId) {
+        ImGui::DockBuilderRemoveNode(dockspaceId);
+        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
+
+        ImGuiID center = dockspaceId;
+        ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.18f, nullptr, &center);
+        ImGuiID right  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.24f, nullptr, &center);
+        ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.5f, nullptr, &right);
+
+        ImGui::DockBuilderDockWindow("Hierarchy", left);
+        ImGui::DockBuilderDockWindow("Inspector", right);
+        ImGui::DockBuilderDockWindow("Stats",     rightBottom);
+        ImGui::DockBuilderDockWindow("Viewport",  center);
+        ImGui::DockBuilderFinish(dockspaceId);
+    }
+
+    // Resize the render target + camera to the Viewport panel size (measured last frame).
+    void SyncViewportSize() {
+        const uint32_t w = static_cast<uint32_t>(m_ViewportSize.x);
+        const uint32_t h = static_cast<uint32_t>(m_ViewportSize.y);
+        if (w == 0 || h == 0 || (w == m_LastViewportW && h == m_LastViewportH))
+            return;
+
+        m_LastViewportW = w;
+        m_LastViewportH = h;
+
+        Renderer::Get().OnResize(w, h);
+        m_EditorCamera.SetViewportSize(w, h);
+
+        if (auto registry = m_Scene ? m_Scene->GetEntityRegistry().lock() : nullptr) {
+            auto camView = registry->view<CameraComponent>();
+            for (auto&& [entity, cc] : camView.each())
+                if (!cc.FixedAspect)
+                    cc.Cam.SetViewportSize(w, h);
+        }
+    }
+
     Ref<Scene> m_Scene;
 
     // Play / edit mode  (P to toggle)
@@ -282,4 +482,17 @@ private:
     float m_MouseDeltaX = 0.0f;
     float m_MouseDeltaY = 0.0f;
     float m_ScrollDelta = 0.0f;
+    float m_LastDeltaTime = 0.0f;
+
+    // ImGui / viewport state
+    ImVec2       m_ViewportSize    { 0.0f, 0.0f };
+    bool         m_ViewportFocused = false;
+    bool         m_ViewportHovered = false;
+    uint32_t     m_LastViewportW   = 0;
+    uint32_t     m_LastViewportH   = 0;
+    bool         m_DockLayoutInit  = false;
+    bool         m_ShowHierarchy   = true;
+    bool         m_ShowInspector   = true;
+    bool         m_ShowStats       = true;
+    entt::entity m_Selected        { entt::null };
 };

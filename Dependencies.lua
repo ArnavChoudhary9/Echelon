@@ -19,6 +19,14 @@ Dep["tinyobjloader"] = { include = "%{wks.location}/Vendor/tinyobjloader" }
 -- stb is header-only: STB_IMAGE_IMPLEMENTATION is defined in a single TU
 -- (TextureImporter.cpp), so there is no compiled lib to link — include only.
 Dep["stb"]           = { include = "%{wks.location}/Vendor/stb" }
+-- Dear ImGui (docking branch). Compiled to a static lib (Vendor/premake5.lua) that
+-- holds ONLY the core (imgui*.cpp) — the GLFW/OpenGL3 backends are compiled straight
+-- into libEchelon (next to GLFW/glad). The core lib is whole-archived into the engine
+-- so every ImGui symbol is re-exported for the application/editor to call across the
+-- shared-library boundary (keeping a single ImGui context). See Echelon/premake5.lua.
+Dep["ImGUI"]         = { include = "%{wks.location}/Vendor/ImGUI",
+                         backends = "%{wks.location}/Vendor/ImGUI/backends",
+                         link = "ImGUI" }
 -- Slang is a *prebuilt* SDK: it is not compiled in Vendor/premake5.lua. It carries a
 -- 'libdir' (link-time search path for libslang.so) in addition to include/link.
 Dep["slang"]         = { include = "%{wks.location}/Vendor/slang/include",

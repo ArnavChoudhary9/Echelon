@@ -96,6 +96,24 @@ namespace Echelon {
         /** @brief The current texture backing a managed resource (editor / debug). */
         Ref<Texture> GetOutput(const std::string& resourceName) const;
 
+        /**
+         * @brief Redirect any pass that writes `$backbuffer` into an offscreen
+         *        framebuffer instead of the window's default framebuffer.
+         *
+         * Used to present the render inside an editor viewport. The offscreen target
+         * mirrors the backbuffer pass's attachment layout at the graph's current size
+         * and is rebuilt on CompileFrom/Resize. When disabled, backbuffer passes draw
+         * to the window default framebuffer as before. No-op if there is no backbuffer
+         * pass. Retrieve the result with GetOffscreenColor().
+         */
+        void SetOffscreenTarget(bool enabled);
+
+        /** @brief Whether offscreen backbuffer redirection is currently enabled. */
+        bool IsOffscreenTarget() const { return m_OffscreenEnabled; }
+
+        /** @brief Color texture of the offscreen backbuffer target (null if disabled/none). */
+        Ref<Texture> GetOffscreenColor() const;
+
         /** @brief True if a valid pipeline is currently compiled. */
         bool IsValid() const { return !m_Order.empty(); }
 
@@ -124,6 +142,7 @@ namespace Echelon {
         void ResolveResourceSize(const std::string& resource, uint32_t& outW, uint32_t& outH) const;
         bool CreateFramebuffers();   ///< (re)build framebuffers for all compiled passes at m_Width/m_Height
         void CreateComputeResources(); ///< (re)build standalone storage textures written by compute passes
+        void BuildOffscreenTarget(); ///< (re)create the offscreen backbuffer FBO (editor viewport) at m_Width/m_Height
 
         Ref<Device>                                m_Device;
         RenderPipelineDesc                         m_Desc;
@@ -136,6 +155,10 @@ namespace Echelon {
         std::unordered_map<std::string, Ref<Texture>> m_ComputeResources;   ///< standalone storage textures written by compute passes
         std::unordered_map<std::string, ExecuteFn> m_Callbacks;            ///< preserved across recompiles
         ExecuteFn                                  m_DefaultCallbacks[3]; ///< indexed by PassType
+
+        // ---- Offscreen backbuffer redirection (editor viewport) ----
+        bool             m_OffscreenEnabled = false;  ///< redirect $backbuffer passes into m_OffscreenFB
+        Ref<Framebuffer> m_OffscreenFB;               ///< offscreen target mirroring the backbuffer pass layout
     };
 
 } // namespace Echelon

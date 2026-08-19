@@ -99,7 +99,7 @@ Entities:
   - IDComponent:
       ID: 22222222-0005-4111-8111-111111111111
     TagComponent:
-      Tag: Sphere_Textured
+      Tag: Sphere_Rough
     TransformComponent:
       Position: [6, 0.6, -1]
       Rotation: [0, 0, 0]
@@ -110,7 +110,7 @@ Entities:
     MeshComponent:
       MeshSource: Sphere
     MaterialComponent:
-      MaterialSource: Materials/Lit.ehmaterial
+      MaterialSource: Materials/Rough.ehmaterial
   - IDComponent:
       ID: e05e1d3d-9ba6-4ef9-845b-bd9ea1a488cb
     TagComponent:
@@ -125,7 +125,7 @@ Entities:
     MeshComponent:
       MeshSource: Cube
     MaterialComponent:
-      MaterialSource: Materials/Metal.ehmaterial
+      MaterialSource: Materials/Lit.ehmaterial
   - IDComponent:
       ID: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
     TagComponent:

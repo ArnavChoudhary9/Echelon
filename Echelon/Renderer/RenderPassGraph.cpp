@@ -245,6 +245,7 @@ namespace Echelon {
             return false;
         }
         CreateComputeResources();
+        BuildOffscreenTarget();   // (re)build the editor viewport target against the new passes
 
         ECHELON_LOG_INFO("RenderPassGraph: compiled {} pass(es) at {}x{}", m_Order.size(), m_Width, m_Height);
         for (const auto& cp : m_Order)
@@ -331,6 +332,7 @@ namespace Echelon {
         if (!m_Order.empty()) {
             CreateFramebuffers();
             CreateComputeResources();
+            BuildOffscreenTarget();   // editor viewport target follows the graph size
         }
     }
 
@@ -350,9 +352,16 @@ namespace Echelon {
         if (!cmd) return;
 
         for (const auto& cp : m_Order) {
+            // Backbuffer passes normally target the window default framebuffer (null).
+            // When offscreen redirection is on (editor viewport), send them to the
+            // offscreen FBO instead so the window is free for the UI.
+            Ref<Framebuffer> target = cp.FB;
+            if (cp.Backbuffer)
+                target = m_OffscreenEnabled ? m_OffscreenFB : nullptr;
+
             PassContext ctx;
             ctx.Pass   = &cp.Desc;
-            ctx.Target = cp.FB;
+            ctx.Target = target;
             ctx.Width  = cp.Width;
             ctx.Height = cp.Height;
 
@@ -392,7 +401,7 @@ namespace Echelon {
             vp.Width  = static_cast<float>(cp.Width);
             vp.Height = static_cast<float>(cp.Height);
             cmd->SetViewport(vp);
-            cmd->BeginRenderPass(cp.Pass, cp.FB);
+            cmd->BeginRenderPass(cp.Pass, target);
             if (cb) (*cb)(*cmd, ctx);
             cmd->EndRenderPass();
         }
@@ -418,6 +427,63 @@ namespace Echelon {
         if (!producer.FB) return nullptr;
         return loc.IsDepth ? producer.FB->GetDepthAttachment()
                            : producer.FB->GetColorAttachment(loc.ColorIndex);
+    }
+
+    // ------------------------------------------------------------------
+    // Offscreen backbuffer redirection (editor viewport)
+    // ------------------------------------------------------------------
+
+    void RenderPassGraph::SetOffscreenTarget(bool enabled) {
+        if (m_OffscreenEnabled == enabled) return;
+        m_OffscreenEnabled = enabled;
+        if (enabled)
+            BuildOffscreenTarget();
+        else
+            m_OffscreenFB = nullptr;
+    }
+
+    Ref<Texture> RenderPassGraph::GetOffscreenColor() const {
+        return m_OffscreenFB ? m_OffscreenFB->GetColorAttachment(0) : nullptr;
+    }
+
+    // (Re)create an offscreen framebuffer that mirrors the backbuffer pass's
+    // attachment layout, so a pass writing $backbuffer can draw into a sampleable
+    // texture instead of the window. Rebuilt whenever the passes or size change.
+    void RenderPassGraph::BuildOffscreenTarget() {
+        m_OffscreenFB = nullptr;
+        if (!m_OffscreenEnabled || !m_Device) return;
+        if (m_Width == 0 || m_Height == 0) return;
+
+        // First pass that writes $backbuffer is the one we redirect.
+        const CompiledPass* bb = nullptr;
+        for (const auto& cp : m_Order)
+            if (cp.Backbuffer) { bb = &cp; break; }
+        if (!bb || !bb->Pass) return;   // no backbuffer pass → nothing to redirect
+
+        FramebufferDesc fb;
+        fb.Width  = m_Width;
+        fb.Height = m_Height;
+        for (const auto& c : bb->Desc.ColorOutputs) {
+            FramebufferAttachment att;
+            att.ExistingTexture = nullptr;   // auto-create a sampleable color texture
+            att.Format = ResourceFormat(m_Desc, c.Resource, TextureFormat::RGBA8_UNORM);
+            fb.ColorAttachments.push_back(att);
+        }
+        if (bb->Desc.DepthOutput) {
+            FramebufferAttachment depth;
+            depth.ExistingTexture = nullptr;
+            depth.Format = ResourceFormat(m_Desc, bb->Desc.DepthOutput->Resource, TextureFormat::D32_FLOAT);
+            fb.DepthAttachment    = depth;
+            fb.HasDepthAttachment = true;
+        }
+        fb.CompatiblePass = bb->Pass;
+        fb.Samples        = bb->Desc.Samples;   // resolved on EndRenderPass if >1
+        fb.DebugName      = "PassGraph_OffscreenViewport";
+
+        m_OffscreenFB = m_Device->CreateFramebuffer(fb);
+        if (!m_OffscreenFB)
+            ECHELON_LOG_ERROR("RenderPassGraph: failed to create offscreen viewport target ({}x{})",
+                              m_Width, m_Height);
     }
 
 } // namespace Echelon

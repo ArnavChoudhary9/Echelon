@@ -80,7 +80,10 @@ namespace Echelon {
         pd.Topology      = PrimitiveTopology::TriangleList;
         pd.Depth.DepthTestEnable  = true;
         pd.Depth.DepthWriteEnable = true;
-        pd.Raster.Cull            = CullMode::None;
+        // Back-face culling (front = CCW). Engine primitives + OBJ meshes are wound
+        // CCW-outward, so only front faces are drawn.
+        pd.Raster.Cull            = CullMode::Back;
+        pd.Raster.Winding         = FrontFace::CounterClockwise;
         pd.Pass          = renderer->GetScenePass();   // compatible with the scene ("forward") pass
         pd.DebugName     = "Material_Pipeline";
         m_Pipeline = device->CreatePipeline(pd);

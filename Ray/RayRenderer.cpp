@@ -150,6 +150,9 @@ namespace Echelon {
         if (!m_Initialized)
             return;
 
+        // Release the editor viewport target (its GL texture) while the context is alive.
+        m_PassGraph.SetOffscreenTarget(false);
+
         m_SystemSets.clear();
         m_FullscreenSets.clear();
         m_FullscreenPipelines.clear();

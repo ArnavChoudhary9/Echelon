@@ -88,6 +88,57 @@ project "yaml-cpp"
     filter {}
 
 -- ============================================================
+-- Dear ImGui  (Compiled static library — core only)
+-- ============================================================
+-- Only the core translation units are built here. The platform/renderer
+-- backends (imgui_impl_glfw / imgui_impl_opengl3) are compiled directly into
+-- libEchelon so they share the engine's single GLFW/glad instance. This core
+-- archive is whole-archived into libEchelon (see Echelon/premake5.lua) so its
+-- symbols are re-exported for the application/editor to call.
+project "ImGUI"
+    location "ImGUI"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "off"
+    warnings "off"
+
+    filter "system:linux"
+        pic "On"
+    filter {}
+
+    targetdir ("../bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("../bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "ImGUI/imgui.cpp",
+        "ImGUI/imgui_draw.cpp",
+        "ImGUI/imgui_tables.cpp",
+        "ImGUI/imgui_widgets.cpp",
+        "ImGUI/imgui_demo.cpp",
+    }
+
+    includedirs
+    {
+        "ImGUI",
+    }
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+
+    filter "configurations:Dist"
+        runtime "Release"
+        optimize "Full"
+
+    filter {}
+
+-- ============================================================
 -- glad  (Compiled static library — OpenGL loader)
 -- ============================================================
 project "glad"

@@ -60,6 +60,9 @@ namespace Echelon {
         void SetData(const void* data, uint64_t size,
                      uint32_t mipLevel = 0, uint32_t arrayLayer = 0) override;
 
+        // The GL texture name, exposed generically for ImGui::Image and other interop.
+        uint64_t GetNativeHandle() const override { return static_cast<uint64_t>(m_Handle); }
+
         GLuint GetHandle() const { return m_Handle; }
         GLenum GetGLTarget() const { return m_GLTarget; }
 

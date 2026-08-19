@@ -66,7 +66,9 @@ namespace MeshPrimitives {
             { {  0.5f, 0.0f,  0.5f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 1.0f } },
             { { -0.5f, 0.0f,  0.5f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
         };
-        std::vector<uint32_t> indices = { 0, 1, 2, 2, 3, 0 };
+        // CCW when viewed from above (+Y), matching the up-facing normal so the top
+        // survives back-face culling (front-face = CCW).
+        std::vector<uint32_t> indices = { 0, 2, 1, 2, 0, 3 };
 
         auto mesh = CreateRef<Mesh>();
         mesh->SetData(std::move(vertices), std::move(indices));
@@ -101,7 +103,9 @@ namespace MeshPrimitives {
                 const uint32_t i1 = i0 + 1;
                 const uint32_t i2 = i0 + (X + 1);
                 const uint32_t i3 = i2 + 1;
-                indices.insert(indices.end(), { i0, i2, i1, i1, i2, i3 });
+                // CCW when viewed from outside (winding matches the outward normal),
+                // so front faces survive back-face culling.
+                indices.insert(indices.end(), { i0, i1, i2, i1, i3, i2 });
             }
         }
 

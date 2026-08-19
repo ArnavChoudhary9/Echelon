@@ -69,6 +69,13 @@ namespace Echelon {
         // ---- Viewport ----
         void OnResize(uint32_t width, uint32_t height) override;
 
+        // ---- Editor viewport (render-to-texture) ----
+        // Redirect the pass graph's $backbuffer passes into an offscreen target so the
+        // scene can be shown inside an ImGui viewport panel. The offscreen size follows
+        // OnResize (driven by the panel). GetViewportTexture returns its color texture.
+        void SetViewportTarget(bool offscreen) override { m_PassGraph.SetOffscreenTarget(offscreen); }
+        Ref<Texture> GetViewportTexture() const override { return m_PassGraph.GetOffscreenColor(); }
+
         // ---- VSync ----
         void SetVSync(bool enabled) override;
         bool IsVSync() const override;

@@ -203,6 +203,29 @@ namespace Echelon {
          */
         virtual void OnResize(uint32_t width, uint32_t height) = 0;
 
+        // ---- Editor viewport (render-to-texture) ----
+
+        /**
+         * @brief Route the final rendered image into an offscreen texture instead of
+         *        the window's backbuffer.
+         *
+         * Used by editors that present the scene inside an ImGui viewport panel: with
+         * this enabled the renderer draws the whole pass graph into an offscreen target
+         * (sized by OnResize) and leaves the window backbuffer free for the UI. The
+         * result is retrieved through GetViewportTexture(). Default: no-op (renders to
+         * the window), so non-editor applications are unaffected.
+         *
+         * @param offscreen true to render into the offscreen viewport texture.
+         */
+        virtual void SetViewportTarget(bool /*offscreen*/) {}
+
+        /**
+         * @brief The color texture the scene was rendered into while offscreen viewport
+         *        mode is enabled (see SetViewportTarget). null when disabled/unsupported.
+         *        Its GetNativeHandle() can be passed to ImGui::Image.
+         */
+        virtual Ref<Texture> GetViewportTexture() const { return nullptr; }
+
         // ---- VSync ----
 
         /**

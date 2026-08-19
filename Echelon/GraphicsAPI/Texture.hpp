@@ -168,6 +168,15 @@ namespace Echelon {
          */
         virtual void SetData(const void* data, uint64_t size,
                              uint32_t mipLevel = 0, uint32_t arrayLayer = 0) = 0;
+
+        /**
+         * @brief Backend-native texture handle for interop (e.g. ImGui::Image).
+         *
+         * OpenGL returns the GL texture name; other backends may return an
+         * ImageView/SRV pointer cast to an integer. 0 means "no native handle".
+         * The value is meant to be passed as an ImTextureID.
+         */
+        virtual uint64_t GetNativeHandle() const { return 0; }
     };
 
 } // namespace Echelon

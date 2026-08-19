@@ -20,6 +20,8 @@
 #endif
 
 namespace Echelon {
+    class ImGuiManager;   // engine-owned ImGui context + backends (Echelon/ImGui/ImGuiManager.hpp)
+
     class ApplicationCommandLineArgs {
     public:
         ApplicationCommandLineArgs(int argc, char** argv) : m_Argc(argc), m_Argv(argv) {}
@@ -136,6 +138,7 @@ namespace Echelon {
 
         Scope<Window> m_Window;
         Scope<Input>  m_Input;
+        Scope<ImGuiManager> m_ImGui;   // ImGui context + backends; drives OnImGUI* each frame
         float m_FrameDuration = 1/60.0f; // Default to 60 FPS frame time, to avoid division by zero on the first frame.
 
         Ref<Project> m_Project;

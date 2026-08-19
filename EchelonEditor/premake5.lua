@@ -18,8 +18,12 @@ project "EchelonEditor"
     }
 
     includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
+    includedirs { Dep.ImGUI.include, Dep.ImGUI.backends }
     UseDeps("spdlog", "glm", "entt", "yaml", "uuid", "tinyobjloader")
 
+    -- The editor calls ImGui:: directly (dockspace + panels). The symbols live in
+    -- libEchelon (whole-archived core + backends), so only the headers are needed
+    -- here — do NOT link the ImGui archive again or a second context would appear.
     links { "Echelon" }
 
     -- libEchelon.so has a transitive NEEDED on libslang-compiler; the linker must be

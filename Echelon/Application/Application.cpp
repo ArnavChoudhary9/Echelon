@@ -7,6 +7,8 @@
 #include "Project/Project.hpp"
 #include "Renderer/RendererService.hpp"
 #include "Asset/AssetManager.hpp"
+#include "ImGui/ImGuiManager.hpp"
+#include "Layer/Overlay.hpp"
 
 #include <filesystem>
 
@@ -63,10 +65,26 @@ namespace Echelon {
             else
                 m_Logger.Error("Failed to initialize renderer '{}'.", m_Config.DefaultRenderer);
         }
+
+        // ---- Initialise ImGui ----
+        // After the renderer so the GL context + glad loader exist. Overlays drive
+        // their UI through OnImGUI* hooks each frame (see Run()).
+        if (m_Window && Renderer::Get().HasActive())
+        {
+            m_ImGui = CreateScope<ImGuiManager>();
+            m_ImGui->Init(*m_Window);
+        }
     };
 
     Application::~Application() {
         m_Running = false;
+
+        // Shut ImGui down first, while the window / GL context is still current
+        // (its backends delete GL objects like the font texture).
+        if (m_ImGui) {
+            m_ImGui->Shutdown();
+            m_ImGui = nullptr;
+        }
 
         // Tear down while the window / GL context is still alive. Order mirrors
         // setup in reverse:
@@ -112,6 +130,22 @@ namespace Echelon {
             // --- Update layers ---
             for (auto& layer : m_LayerStack) {
                 layer->OnUpdate(m_FrameDuration);
+            }
+
+            // --- ImGui frame: dockspace + overlay panels, composited onto the window ---
+            // Overlays render the scene into an offscreen target during OnUpdate above,
+            // then present it inside a viewport panel here. The three OnImGUI* hooks are
+            // dispatched in phase order so one overlay's dockspace (OnImGUIBegin) can host
+            // every overlay's panels (OnImGUIRender) before it is closed (OnImGUIEnd).
+            if (m_ImGui && m_ImGui->IsInitialized()) {
+                m_ImGui->BeginFrame();
+                for (auto& layer : m_LayerStack)
+                    if (auto* overlay = dynamic_cast<Overlay*>(layer.get())) overlay->OnImGUIBegin();
+                for (auto& layer : m_LayerStack)
+                    if (auto* overlay = dynamic_cast<Overlay*>(layer.get())) overlay->OnImGUIRender();
+                for (auto& layer : m_LayerStack)
+                    if (auto* overlay = dynamic_cast<Overlay*>(layer.get())) overlay->OnImGUIEnd();
+                m_ImGui->EndFrame();
             }
 
             // --- Present ---
