@@ -19,6 +19,8 @@
 #include "Echelon/Echelon.hpp"
 #include "Echelon/Asset/Texture/TextureAsset.hpp"
 
+struct ImFont;  // forward-declare so EditorContext can hold ImFont* without pulling imgui.h
+
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <cstdint>
@@ -94,6 +96,14 @@ struct EditorContext {
     // Toolbar icons
     EditorIcons DarkIcons;
     EditorIcons LightIcons;
+
+    // Content-browser icons (loaded once, shared across frames)
+    Ref<TextureAsset> DirIcon;
+    Ref<TextureAsset> FileIcon;
+
+    // Extra font for content-browser labels (larger than the 24px default).
+    // Loaded in EditorLayer::OnAttach before the atlas is built.
+    ImFont* FontLarge = nullptr;
 
     // The camera is driven whenever Alt is held (momentary) or free-cam is on.
     bool CameraActive() const {

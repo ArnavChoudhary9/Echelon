@@ -82,9 +82,11 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
             "{MKDIR} %{cfg.buildtarget.directory}\\EditorResources\\Icons",
             ("xcopy /Y /Q \"%{wks.location}\\EchelonEditor\\Resources\\Icons\\*.png\" \"%{cfg.buildtarget.directory}\\EditorResources\\Icons\\\""),
+            "{MKDIR} %{cfg.buildtarget.directory}\\EditorResources\\Fonts\\opensans",
+            ("xcopy /Y /Q \"%{wks.location}\\EchelonEditor\\Resources\\Fonts\\opensans\\*.ttf\" \"%{cfg.buildtarget.directory}\\EditorResources\\Fonts\\opensans\\\""),
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}\\imgui.ini\" copy /Y \"%{wks.location}\\EchelonEditor\\Resources\\imgui.ini\" \"%{cfg.buildtarget.directory}\\imgui.ini\""),
         }
 
@@ -121,9 +123,11 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
             "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
             "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
+            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans",
+            "cp -f %{wks.location}/EchelonEditor/Resources/Fonts/opensans/*.ttf %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans/",
             ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 
@@ -156,9 +160,11 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
             "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
             "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
+            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans",
+            "cp -f %{wks.location}/EchelonEditor/Resources/Fonts/opensans/*.ttf %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans/",
             ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 

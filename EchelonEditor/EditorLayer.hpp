@@ -23,6 +23,7 @@
 #include "Panels/HierarchyPanel.hpp"
 #include "Panels/InspectorPanel.hpp"
 #include "Panels/StatsPanel.hpp"
+#include "Panels/ContentBrowserPanel.hpp"
 
 #include "imgui.h"
 #include "imgui_internal.h"   // DockBuilder* for the first-run default layout
@@ -45,6 +46,17 @@ public:
         m_Ctx = CreateRef<EditorContext>();
 
         auto& window = Application::Get().GetWindow();
+
+        // ---- Fonts (must be loaded before the first BeginFrame builds the atlas) ----
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            io.Fonts->AddFontFromFileTTF("EditorResources/Fonts/opensans/OpenSans-Bold.ttf", 24.0f);
+            io.FontDefault = io.Fonts->AddFontFromFileTTF(
+                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 24.0f);
+            // Larger variant for the content browser labels.
+            m_Ctx->FontLarge = io.Fonts->AddFontFromFileTTF(
+                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 28.0f);
+        }
 
         // ---- Load or create scene ----
         auto project = Application::Get().GetProject();
@@ -76,6 +88,10 @@ public:
         LoadIconSet(m_Ctx->DarkIcons,  "dark");
         LoadIconSet(m_Ctx->LightIcons, "light");
 
+        // ---- Content-browser icons ----
+        m_Ctx->DirIcon  = LoadIcon("EditorResources/Icons/DirectoryIcon.png");
+        m_Ctx->FileIcon = LoadIcon("EditorResources/Icons/FileIcon.png");
+
         // ---- Bus subscriptions (RAII: auto-unsubscribe on destruction) ----
         m_CmdSub = OnMessage<EditorCommandEvent>([this](const EditorCommandEvent& e) {
             OnCommand(e.Action);
@@ -85,16 +101,18 @@ public:
         });
 
         // ---- Spawn the panels as overlays (they share m_Ctx, talk via the bus) ----
-        m_Toolbar   = CreateRef<ToolbarPanel>(m_Ctx);
-        m_Viewport  = CreateRef<ViewportPanel>(m_Ctx);
-        m_Hierarchy = CreateRef<HierarchyPanel>(m_Ctx);
-        m_Inspector = CreateRef<InspectorPanel>(m_Ctx);
-        m_Stats     = CreateRef<StatsPanel>(m_Ctx);
+        m_Toolbar        = CreateRef<ToolbarPanel>(m_Ctx);
+        m_Viewport       = CreateRef<ViewportPanel>(m_Ctx);
+        m_Hierarchy      = CreateRef<HierarchyPanel>(m_Ctx);
+        m_Inspector      = CreateRef<InspectorPanel>(m_Ctx);
+        m_Stats          = CreateRef<StatsPanel>(m_Ctx);
+        m_ContentBrowser = CreateRef<ContentBrowserPanel>(m_Ctx);
         auto& app = Application::Get();
         app.PushOverlay(m_Viewport);
         app.PushOverlay(m_Hierarchy);
         app.PushOverlay(m_Inspector);
         app.PushOverlay(m_Stats);
+        app.PushOverlay(m_ContentBrowser);
         app.PushOverlay(m_Toolbar);
     }
 
@@ -197,10 +215,11 @@ public:
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("View")) {
-                if (m_Hierarchy) ImGui::MenuItem("Hierarchy", nullptr, m_Hierarchy->OpenPtr());
-                if (m_Inspector) ImGui::MenuItem("Inspector", nullptr, m_Inspector->OpenPtr());
-                if (m_Stats)     ImGui::MenuItem("Stats",     nullptr, m_Stats->OpenPtr());
-                if (m_Toolbar)   ImGui::MenuItem("Toolbar",   nullptr, m_Toolbar->OpenPtr());
+                if (m_Hierarchy)      ImGui::MenuItem("Hierarchy",        nullptr, m_Hierarchy->OpenPtr());
+                if (m_Inspector)      ImGui::MenuItem("Inspector",        nullptr, m_Inspector->OpenPtr());
+                if (m_Stats)          ImGui::MenuItem("Stats",            nullptr, m_Stats->OpenPtr());
+                if (m_ContentBrowser) ImGui::MenuItem("Content Browser",  nullptr, m_ContentBrowser->OpenPtr());
+                if (m_Toolbar)        ImGui::MenuItem("Toolbar",          nullptr, m_Toolbar->OpenPtr());
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -370,12 +389,14 @@ private:
         ImGuiID center = dockspaceId;
         ImGuiID left   = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left,  0.18f, nullptr, &center);
         ImGuiID right  = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.24f, nullptr, &center);
+        ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down,  0.28f, nullptr, &center);
         ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.5f, nullptr, &right);
 
-        ImGui::DockBuilderDockWindow("Hierarchy", left);
-        ImGui::DockBuilderDockWindow("Inspector", right);
-        ImGui::DockBuilderDockWindow("Stats",     rightBottom);
-        ImGui::DockBuilderDockWindow("Viewport",  center);
+        ImGui::DockBuilderDockWindow("Hierarchy",       left);
+        ImGui::DockBuilderDockWindow("Inspector",       right);
+        ImGui::DockBuilderDockWindow("Stats",           rightBottom);
+        ImGui::DockBuilderDockWindow("Content Browser", bottom);
+        ImGui::DockBuilderDockWindow("Viewport",        center);
         // Toolbar is intentionally left floating (on top); the user can dock it.
         ImGui::DockBuilderFinish(dockspaceId);
     }
@@ -557,11 +578,12 @@ private:
     Ref<EditorContext> m_Ctx;
 
     // Panels (owned via the layer stack; kept here for the View menu toggles).
-    Ref<ToolbarPanel>   m_Toolbar;
-    Ref<ViewportPanel>  m_Viewport;
-    Ref<HierarchyPanel> m_Hierarchy;
-    Ref<InspectorPanel> m_Inspector;
-    Ref<StatsPanel>     m_Stats;
+    Ref<ToolbarPanel>        m_Toolbar;
+    Ref<ViewportPanel>       m_Viewport;
+    Ref<HierarchyPanel>      m_Hierarchy;
+    Ref<InspectorPanel>      m_Inspector;
+    Ref<StatsPanel>          m_Stats;
+    Ref<ContentBrowserPanel> m_ContentBrowser;
 
     // Bus subscriptions (RAII).
     ScopedSubscription m_CmdSub;
