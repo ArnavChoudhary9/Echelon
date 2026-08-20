@@ -152,6 +152,23 @@ namespace Echelon {
          * @param height New height in pixels.
          */
         virtual void Resize(uint32_t width, uint32_t height) = 0;
+
+        /**
+         * @brief Read back a single texel from a color attachment into CPU memory.
+         *
+         * Used by editor tooling (e.g. GPU entity picking: read the entity-id at the
+         * clicked pixel). @p x / @p y are in the attachment's own pixel space with the
+         * backend's native origin (OpenGL: bottom-left). @p out must hold at least the
+         * attachment's per-texel byte size. Returns false if unsupported or out of range.
+         *
+         * @param attachmentIndex Color attachment to sample.
+         * @param x               Texel X.
+         * @param y               Texel Y (backend-native origin).
+         * @param out             Destination buffer.
+         * @param outSize         Size of @p out in bytes.
+         */
+        virtual bool ReadPixel(uint32_t /*attachmentIndex*/, int32_t /*x*/, int32_t /*y*/,
+                               void* /*out*/, uint32_t /*outSize*/) { return false; }
     };
 
 } // namespace Echelon

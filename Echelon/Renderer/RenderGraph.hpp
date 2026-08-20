@@ -46,6 +46,7 @@ namespace Echelon {
 
     struct DrawCommand {
         UUID         EntityUUID;
+        uint32_t     EntityID     = 0;   ///< entt entity id (integral) — used by the editor picking pass
         Ref<Buffer>  VertexBuffer;
         Ref<Buffer>  IndexBuffer;       ///< nullptr for non-indexed draws
         uint32_t     VertexCount  = 0;
@@ -77,6 +78,7 @@ namespace Echelon {
         // Per-instance data (parallel arrays: one entry per draw in this batch).
         std::vector<glm::mat4>          Transforms;
         std::vector<Ref<DescriptorSet>> MaterialSets;
+        std::vector<uint32_t>           EntityIDs;    ///< entt entity id per instance (editor picking)
     };
 
     // ================================================================

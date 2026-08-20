@@ -118,7 +118,7 @@ namespace Echelon {
         //  - Graphics passes record the scene draw list.
         //  - Fullscreen passes run a post-process (bind shader + inputs, draw a triangle).
         m_PassGraph.SetDefaultCallback(PassType::Graphics,
-            [this](CommandBuffer&, const PassContext&) { ExecuteDrawList(); });
+            [this](CommandBuffer&, const PassContext& ctx) { ExecuteDrawList(ctx); });
         m_PassGraph.SetDefaultCallback(PassType::Fullscreen,
             [this](CommandBuffer& cmd, const PassContext& ctx) { ExecuteFullscreenPass(cmd, ctx); });
         m_PassGraph.SetDefaultCallback(PassType::Compute,
@@ -128,7 +128,7 @@ namespace Echelon {
         // built-in single-pass default. (The project may not be active yet during
         // Init — EnsureUpToDate() resolves the asset lazily on the first frame.)
         if (!TryLoadPipelineAsset()) {
-            if (!m_PassGraph.CompileFrom(DefaultForwardDesc(), m_Device, width, height)) {
+            if (!m_PassGraph.CompileFrom(WithAuxiliary(DefaultForwardDesc()), m_Device, width, height)) {
                 ECHELON_LOG_ERROR("Ray: failed to compile default pass graph");
                 return false;
             }
@@ -157,6 +157,7 @@ namespace Echelon {
         m_FullscreenSets.clear();
         m_FullscreenPipelines.clear();
         m_ComputePipelines.clear();
+        m_OverridePipelines.clear();
         m_FullscreenShaders.clear();
         m_FullscreenLayout  = nullptr;
         m_LinearSampler     = nullptr;
@@ -772,6 +773,60 @@ namespace Echelon {
                          envSize, irrSize, preSize, preMips, lutSize);
     }
 
+    // ------------------------------------------------------------------
+    // Auxiliary passes (generic pass-graph extension)
+    //
+    // A host (e.g. the editor) contributes extra resources + passes that are
+    // merged into whichever pipeline the renderer compiles. Nothing here knows
+    // about "picking" — an auxiliary Graphics pass that declares a Shader simply
+    // draws all scene geometry with that one pipeline (see ExecuteDrawList), and
+    // its output is read back with ReadTargetPixel().
+    // ------------------------------------------------------------------
+
+    RenderPipelineDesc RayRenderer::WithAuxiliary(const RenderPipelineDesc& base) const {
+        if (!m_HasAux) return base;
+        RenderPipelineDesc d = base;
+        d.Resources.insert(d.Resources.end(), m_AuxDesc.Resources.begin(), m_AuxDesc.Resources.end());
+        d.Passes.insert(d.Passes.end(), m_AuxDesc.Passes.begin(), m_AuxDesc.Passes.end());
+        return d;
+    }
+
+    void RayRenderer::SetAuxiliaryPipeline(const RenderPipelineDesc& aux) {
+        m_AuxDesc = aux;
+        m_HasAux  = !aux.Passes.empty() || !aux.Resources.empty();
+        if (m_Initialized) {
+            RecompilePassGraph();     // rebuild the graph with (or without) the aux passes
+            BuildDefaultPipeline();   // scene pipelines follow the (possibly rebuilt) forward pass
+        }
+    }
+
+    // Build/cache the single pipeline an override-shader Graphics pass draws all
+    // geometry with. Built against that pass's RenderPass with depth test on so the
+    // front-most surface wins (depth prepass / id pass / normals pass / …).
+    Ref<Pipeline> RayRenderer::GetOverridePipeline(const std::string& passName,
+                                                   const std::string& shaderName) {
+        if (auto it = m_OverridePipelines.find(passName);
+            it != m_OverridePipelines.end() && it->second)
+            return it->second;
+        if (shaderName.empty()) return nullptr;
+
+        auto sit = m_FullscreenShaders.find(shaderName);
+        Ref<ShaderAsset> shaderAsset = (sit != m_FullscreenShaders.end()) ? sit->second : nullptr;
+        if (!shaderAsset) {
+            shaderAsset = LoadShaderAsset(shaderName);
+            if (shaderAsset) m_FullscreenShaders[shaderName] = shaderAsset;
+        }
+        if (!shaderAsset || !shaderAsset->GetGpuShader()) {
+            ECHELON_LOG_ERROR("Ray: override shader '{}' (pass '{}') failed to load", shaderName, passName);
+            return nullptr;
+        }
+
+        auto pipe = BuildPipeline(m_Device, m_PassGraph.GetRenderPass(passName), shaderAsset,
+                                  ("Ray_Override_" + passName).c_str());
+        m_OverridePipelines[passName] = pipe;
+        return pipe;
+    }
+
     void RayRenderer::EnsureUpToDate() {
         // Lazily resolve the project's render pipeline asset — the project may not
         // have been active during Init(). Once resolved, rebuild the scene pipelines
@@ -795,6 +850,7 @@ namespace Echelon {
         m_SystemSets.clear();
         m_FullscreenPipelines.clear();                               // rebuilt lazily
         m_ComputePipelines.clear();
+        m_OverridePipelines.clear();                                 // rebuilt lazily against new passes
         for (auto& [name, sh] : m_FullscreenShaders)
             if (sh) sh->UploadGPU(this);                             // rebuild post GL programs if released
         if (m_PipelineAsset) RecompilePassGraph();
@@ -825,18 +881,21 @@ namespace Echelon {
     }
 
     bool RayRenderer::RecompilePassGraph() {
-        // Fullscreen pipelines are built against per-pass RenderPass objects that a
-        // recompile replaces, so drop them (rebuilt lazily against the new passes).
+        // Fullscreen/override pipelines are built against per-pass RenderPass objects that
+        // a recompile replaces, so drop them (rebuilt lazily against the new passes).
         m_FullscreenPipelines.clear();
         m_ComputePipelines.clear();
+        m_OverridePipelines.clear();
 
+        // Auxiliary resources/passes (SetAuxiliaryPipeline) are merged into whichever
+        // base pipeline compiles.
         if (m_PipelineAsset && m_PipelineAsset->IsValid()) {
-            if (m_PassGraph.CompileFrom(m_PipelineAsset->GetDescription(), m_Device,
+            if (m_PassGraph.CompileFrom(WithAuxiliary(m_PipelineAsset->GetDescription()), m_Device,
                                         m_ViewportWidth, m_ViewportHeight))
                 return true;
             ECHELON_LOG_ERROR("Ray: pipeline asset failed to compile; using built-in default");
         }
-        return m_PassGraph.CompileFrom(DefaultForwardDesc(), m_Device,
+        return m_PassGraph.CompileFrom(WithAuxiliary(DefaultForwardDesc()), m_Device,
                                        m_ViewportWidth, m_ViewportHeight);
     }
 
@@ -1019,7 +1078,35 @@ namespace Echelon {
     // bound render pass (invoked by the pass graph's "forward" callback).
     // ------------------------------------------------------------------
 
-    void RayRenderer::ExecuteDrawList() {
+    void RayRenderer::ExecuteDrawList(const PassContext& ctx) {
+        // Override-shader pass: draw ALL scene geometry with one pipeline (a generic
+        // capability — depth prepass, object-id pass for picking, normals, wireframe…),
+        // instead of each entity's material pipeline. The shader reads g_Object.ObjectId
+        // (set per draw below) for any per-object work.
+        const bool useOverride = ctx.Pass && !ctx.Pass->Shader.empty();
+        if (useOverride) {
+            Ref<Pipeline> pipe = GetOverridePipeline(ctx.Pass->Name, ctx.Pass->Shader);
+            if (!pipe) return;
+            m_CommandBuffer->BindPipeline(pipe);
+            BindSystemConstants(pipe);   // g_Frame + g_Object at this shader's bindings
+            const auto& shader = pipe->GetShader();
+
+            for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
+                for (const auto& batch : group.Batches) {
+                    for (size_t i = 0; i < batch.Transforms.size(); ++i) {
+                        m_CurrentObjectId = (i < batch.EntityIDs.size()) ? batch.EntityIDs[i] : 0u;
+                        const auto& transform = batch.Transforms[i];
+                        if (batch.IndexBuffer && batch.IndexCount > 0)
+                            DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader, transform, batch.IndexCount);
+                        else
+                            Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
+                    }
+                }
+            }
+            return;
+        }
+
+        // Normal path: each pipeline group uses its own (material) pipeline.
         for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
             const auto& pipeline = group.PipelineRef ? group.PipelineRef : GetErrorPipeline();
             if (!pipeline) continue;
@@ -1036,6 +1123,7 @@ namespace Echelon {
                     if (i < batch.MaterialSets.size() && batch.MaterialSets[i])
                         m_CommandBuffer->BindDescriptorSet(batch.MaterialSets[i], 1);
 
+                    m_CurrentObjectId = (i < batch.EntityIDs.size()) ? batch.EntityIDs[i] : 0u;
                     const auto& transform = batch.Transforms[i];
                     if (batch.IndexBuffer && batch.IndexCount > 0) {
                         DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader,
@@ -1202,6 +1290,7 @@ namespace Echelon {
         ObjectConstantsCPU oc;
         oc.Model        = transform;
         oc.NormalMatrix = glm::mat4(glm::inverseTranspose(glm::mat3(transform)));
+        oc.ObjectId     = glm::uvec4(m_CurrentObjectId, 0u, 0u, 0u);
         if (m_ObjectUBO) m_ObjectUBO->SetData(&oc, sizeof(oc));
 
         m_CommandBuffer->BindVertexBuffer(vertexBuffer);
@@ -1223,6 +1312,7 @@ namespace Echelon {
         ObjectConstantsCPU oc;
         oc.Model        = transform;
         oc.NormalMatrix = glm::mat4(glm::inverseTranspose(glm::mat3(transform)));
+        oc.ObjectId     = glm::uvec4(m_CurrentObjectId, 0u, 0u, 0u);
         if (m_ObjectUBO) m_ObjectUBO->SetData(&oc, sizeof(oc));
 
         m_CommandBuffer->BindVertexBuffer(vertexBuffer);

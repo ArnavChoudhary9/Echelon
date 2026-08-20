@@ -38,6 +38,12 @@ namespace Echelon {
         // (which rebuilds GPU buffers) forces exactly one graph rebuild.
         version = HashCombine(version, AssetManager::Get().GetEpoch());
 
+        // Fold in the scene identity so swapping to a *different* scene object always
+        // rebuilds — even if its contents (UUIDs/transforms) are identical (e.g. an
+        // editor play-mode copy). Without this the draw list could keep the previous
+        // scene's per-entity data.
+        version = HashCombine(version, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(scene.get())));
+
         auto registry = scene->GetEntityRegistry().lock();
         if (!registry) return version;
 
@@ -193,6 +199,7 @@ namespace Echelon {
 
             DrawCommand cmd;
             cmd.EntityUUID   = id.ID;
+            cmd.EntityID     = static_cast<uint32_t>(entt::to_integral(entity));
             cmd.VertexBuffer = mc.RuntimeMesh->GetVertexBuffer();
             cmd.IndexBuffer  = mc.RuntimeMesh->GetIndexBuffer();
             cmd.VertexCount  = mc.RuntimeMesh->GetVertexCount();
@@ -273,9 +280,10 @@ namespace Echelon {
                 currentIB = ibPtr;
             }
 
-            // Append instance data (parallel arrays: transform + its material set)
+            // Append instance data (parallel arrays: transform + its material set + entity id)
             currentBatch->Transforms.push_back(cmd.Transform);
             currentBatch->MaterialSets.push_back(cmd.MaterialSet);
+            currentBatch->EntityIDs.push_back(cmd.EntityID);
         }
     }
 

@@ -65,6 +65,10 @@ namespace Echelon {
         RG32_FLOAT,
         RGBA32_FLOAT,
 
+        // Unsigned-integer color (e.g. entity-id / picking render targets).
+        // Not filterable; sampled/blended access is undefined — use for readback.
+        R32_UINT,
+
         // Depth / stencil
         D16_UNORM,
         D24_UNORM_S8_UINT,
@@ -81,6 +85,15 @@ namespace Echelon {
             || fmt == TextureFormat::D24_UNORM_S8_UINT
             || fmt == TextureFormat::D32_FLOAT
             || fmt == TextureFormat::D32_FLOAT_S8_UINT;
+    }
+
+    /**
+     * @brief Returns true for integer color formats (cleared/read as integers, never
+     *        filtered). The clear path and pixel readback special-case these.
+     */
+    inline bool IsIntegerFormat(TextureFormat fmt)
+    {
+        return fmt == TextureFormat::R32_UINT;
     }
 
     // ================================================================

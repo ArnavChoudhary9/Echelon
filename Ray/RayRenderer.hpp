@@ -76,6 +76,12 @@ namespace Echelon {
         void SetViewportTarget(bool offscreen) override { m_PassGraph.SetOffscreenTarget(offscreen); }
         Ref<Texture> GetViewportTexture() const override { return m_PassGraph.GetOffscreenColor(); }
 
+        // ---- Auxiliary passes + generic render-target readback ----
+        void SetAuxiliaryPipeline(const RenderPipelineDesc& aux) override;
+        bool ReadTargetPixel(const std::string& resource, uint32_t x, uint32_t y,
+                             void* out, uint32_t outSize) override
+        { return m_PassGraph.ReadResourcePixel(resource, x, y, out, outSize); }
+
         // ---- VSync ----
         void SetVSync(bool enabled) override;
         bool IsVSync() const override;
@@ -112,8 +118,10 @@ namespace Echelon {
         /** @brief Bind g_Frame / g_Object (resolved by name) for the given pipeline's shader. */
         void BindSystemConstants(const Ref<Pipeline>& pipeline);
 
-        /** @brief Record the sorted draw list into the currently-bound render pass (the graphics-pass handler). */
-        void ExecuteDrawList();
+        /** @brief Record the sorted draw list into the currently-bound render pass (the graphics-pass handler).
+         *  When the pass declares a Shader, all geometry is drawn with that single override pipeline
+         *  (e.g. depth prepass / object-id pass) instead of per-material pipelines. */
+        void ExecuteDrawList(const PassContext& ctx);
 
         /** @brief Default handler for Fullscreen passes: bind the post pipeline + inputs, draw a fullscreen triangle. */
         void ExecuteFullscreenPass(CommandBuffer& cmd, const PassContext& ctx);
@@ -138,6 +146,12 @@ namespace Echelon {
 
         /** @brief Precompute IBL (procedural sky → env cube → irradiance + prefilter + BRDF LUT), once. */
         void PrecomputeIBL();
+
+        /** @brief Merge any auxiliary resources/passes (SetAuxiliaryPipeline) into a base description. */
+        RenderPipelineDesc WithAuxiliary(const RenderPipelineDesc& base) const;
+
+        /** @brief Get/build+cache the override pipeline a Graphics pass draws all geometry with. */
+        Ref<Pipeline> GetOverridePipeline(const std::string& passName, const std::string& shaderName);
 
         bool m_Initialized = false;
 
@@ -195,6 +209,14 @@ namespace Echelon {
         Ref<Pipeline>    m_ShadowCubePipeline;
         uint32_t         m_ShadowRes      = 2048;   ///< directional/spot map resolution
         uint32_t         m_PointShadowRes = 1024;   ///< point cubemap face resolution
+
+        // ---- Auxiliary passes (generic pass-graph extension; e.g. the editor's id pass) ----
+        RenderPipelineDesc m_AuxDesc;               ///< extra resources/passes merged into the compiled graph
+        bool               m_HasAux = false;
+        std::unordered_map<std::string, Ref<Pipeline>> m_OverridePipelines; ///< override-shader pipeline per Graphics pass
+
+        // Per-object id written into g_Object.ObjectId for the current draw (generic per-object metadata).
+        uint32_t         m_CurrentObjectId = 0;
 
         /// One shadow caster per light type, recorded during BeginScene (index into g_Lights).
         struct ShadowCasterInfo {

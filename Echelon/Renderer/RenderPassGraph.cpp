@@ -429,6 +429,19 @@ namespace Echelon {
                            : producer.FB->GetColorAttachment(loc.ColorIndex);
     }
 
+    bool RenderPassGraph::ReadResourcePixel(const std::string& resourceName, uint32_t x, uint32_t y,
+                                            void* out, uint32_t outSize) const {
+        auto it = m_ResourceProducers.find(resourceName);
+        if (it == m_ResourceProducers.end()) return false;
+        const auto& loc = it->second;
+        if (loc.IsDepth) return false;                       // depth readback unsupported
+        if (loc.PassIndex >= m_Order.size()) return false;
+        const auto& producer = m_Order[loc.PassIndex];
+        if (!producer.FB) return false;                      // backbuffer / compute — no FB to read
+        return producer.FB->ReadPixel(loc.ColorIndex, static_cast<int32_t>(x), static_cast<int32_t>(y),
+                                      out, outSize);
+    }
+
     // ------------------------------------------------------------------
     // Offscreen backbuffer redirection (editor viewport)
     // ------------------------------------------------------------------

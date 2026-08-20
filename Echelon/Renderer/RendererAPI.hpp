@@ -45,6 +45,7 @@ namespace Echelon {
     class RenderPass;
     class Framebuffer;
     class CommandBuffer;
+    struct RenderPipelineDesc;
 
     // ================================================================
     // Renderer capability / info
@@ -225,6 +226,38 @@ namespace Echelon {
          *        Its GetNativeHandle() can be passed to ImGui::Image.
          */
         virtual Ref<Texture> GetViewportTexture() const { return nullptr; }
+
+        // ---- Auxiliary passes (generic pass-graph extension) ----
+
+        /**
+         * @brief Contribute extra resources + passes that are merged into the active
+         *        pass graph on every (re)compile.
+         *
+         * A generic hook for a host (e.g. the editor) to add its own render passes —
+         * a depth prepass, an object-id pass for picking, a normals/velocity buffer,
+         * a debug overlay — without baking them into the project's authored pipeline.
+         * The renderer appends @p aux.Resources / @p aux.Passes to whichever pipeline
+         * it compiles. Pass an empty description to clear. Default: no-op.
+         *
+         * The results of an auxiliary pass are read back through ReadTargetPixel() or
+         * sampled by later passes like any other resource. Nothing here is specific to
+         * any one use case — passes are declared with the same RenderPipelineDesc data
+         * as a project pipeline. A Graphics pass that declares a `Shader` draws the
+         * whole scene with that single shader (e.g. an id shader), instead of the
+         * per-material pipelines.
+         */
+        virtual void SetAuxiliaryPipeline(const RenderPipelineDesc& /*aux*/) {}
+
+        /**
+         * @brief Read back a single texel from a named pass-graph color resource.
+         *
+         * Generic render-target readback (used e.g. by editor GPU picking to read the
+         * object id under the cursor). @p x / @p y are in the resource's pixel space
+         * with the backend's native origin (OpenGL: bottom-left). @p out must hold at
+         * least one texel. Returns false if the resource is unknown / unsupported.
+         */
+        virtual bool ReadTargetPixel(const std::string& /*resource*/, uint32_t /*x*/, uint32_t /*y*/,
+                                     void* /*out*/, uint32_t /*outSize*/) { return false; }
 
         // ---- VSync ----
 

@@ -42,6 +42,7 @@ public struct ObjectConstants
 {
     public float4x4 Model;
     public float4x4 NormalMatrix;     // inverse-transpose of Model
+    public uint4    ObjectId;         // x = per-object id (renderer-assigned, e.g. entity id); yzw reserved
 };
 
 public ConstantBuffer<FrameConstants>  g_Frame;

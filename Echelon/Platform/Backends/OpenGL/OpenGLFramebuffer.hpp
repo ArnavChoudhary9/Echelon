@@ -28,6 +28,8 @@ namespace Echelon {
         bool         HasDepthAttachment() const override { return m_DepthAttachment != nullptr; }
         uint32_t     GetSamples() const override { return m_Samples; }
         void         Resize(uint32_t width, uint32_t height) override;
+        bool         ReadPixel(uint32_t attachmentIndex, int32_t x, int32_t y,
+                               void* out, uint32_t outSize) override;
 
         /** @brief Resolve the multisample render FBO into the single-sample resolve textures. */
         void         Resolve() override;

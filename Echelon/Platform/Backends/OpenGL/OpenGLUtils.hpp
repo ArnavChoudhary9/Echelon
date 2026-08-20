@@ -34,6 +34,7 @@ namespace Echelon::OpenGLUtils {
             case TextureFormat::R32_FLOAT:          return GL_R32F;
             case TextureFormat::RG32_FLOAT:         return GL_RG32F;
             case TextureFormat::RGBA32_FLOAT:       return GL_RGBA32F;
+            case TextureFormat::R32_UINT:           return GL_R32UI;
             case TextureFormat::D16_UNORM:          return GL_DEPTH_COMPONENT16;
             case TextureFormat::D24_UNORM_S8_UINT:  return GL_DEPTH24_STENCIL8;
             case TextureFormat::D32_FLOAT:          return GL_DEPTH_COMPONENT32F;
@@ -54,6 +55,7 @@ namespace Echelon::OpenGLUtils {
             }
         }
         switch (fmt) {
+            case TextureFormat::R32_UINT:       return GL_RED_INTEGER;
             case TextureFormat::R8_UNORM:
             case TextureFormat::R16_FLOAT:
             case TextureFormat::R32_FLOAT:      return GL_RED;
@@ -76,6 +78,7 @@ namespace Echelon::OpenGLUtils {
             case TextureFormat::RG32_FLOAT:
             case TextureFormat::R32_FLOAT:
             case TextureFormat::D32_FLOAT:      return GL_FLOAT;
+            case TextureFormat::R32_UINT:       return GL_UNSIGNED_INT;
             case TextureFormat::D24_UNORM_S8_UINT:
                 return GL_UNSIGNED_INT_24_8;
             case TextureFormat::D32_FLOAT_S8_UINT:

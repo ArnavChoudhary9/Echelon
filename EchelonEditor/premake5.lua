@@ -78,6 +78,8 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
+            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
+            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
         }
@@ -111,6 +113,8 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
+            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
+            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
         }
@@ -140,6 +144,8 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
             "{COPYFILE} %{wks.location}/Ray/Shaders/FXAA.slang %{cfg.buildtarget.directory}/Shaders",
+            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
+            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
         }

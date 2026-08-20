@@ -208,6 +208,29 @@ namespace Echelon {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
+    bool OpenGLFramebuffer::ReadPixel(uint32_t attachmentIndex, int32_t x, int32_t y,
+                                      void* out, uint32_t outSize)
+    {
+        if (!out || attachmentIndex >= m_ColorAttachments.size())
+            return false;
+        if (x < 0 || y < 0 || x >= static_cast<int32_t>(m_Width) || y >= static_cast<int32_t>(m_Height))
+            return false;
+
+        const TextureFormat fmt = m_Desc.ColorAttachments[attachmentIndex].Format;
+        const GLenum glFormat = OpenGLUtils::ToGLFormat(fmt);
+        const GLenum glType   = OpenGLUtils::ToGLDataType(fmt);
+
+        // m_FBO holds the sampleable single-sample textures (it is the resolve FBO when MSAA),
+        // so reading from it returns resolved pixels.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, m_FBO);
+        glReadBuffer(GL_COLOR_ATTACHMENT0 + attachmentIndex);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(x, y, 1, 1, glFormat, glType, out);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+        (void)outSize;
+        return true;
+    }
+
     void OpenGLFramebuffer::Resolve()
     {
         if (m_Samples <= 1 || m_ResolveFBO == 0) return;

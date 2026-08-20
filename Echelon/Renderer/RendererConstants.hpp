@@ -6,7 +6,7 @@
  *
  * Any renderer plugin that uploads g_Frame / g_Object should include this
  * header instead of redeclaring these structs locally. Sizes must stay in
- * sync with the std140 layout Slang reflects (Frame = 224 B, Object = 128 B).
+ * sync with the std140 layout Slang reflects (Frame = 224 B, Object = 144 B).
  */
 
 #include "Echelon/GraphicsAPI/ShaderReflection.hpp"
@@ -27,8 +27,9 @@ namespace Echelon {
     };
 
     struct ObjectConstantsCPU {
-        glm::mat4 Model{ 1.0f };
-        glm::mat4 NormalMatrix{ 1.0f };
+        glm::mat4  Model{ 1.0f };
+        glm::mat4  NormalMatrix{ 1.0f };
+        glm::uvec4 ObjectId{ 0u };   // x = per-object id (renderer-assigned, e.g. entity id); yzw reserved
     };
 
     // ---- Lighting scaffold: CPU mirror of Echelon.slang's g_Lights (std140). ----

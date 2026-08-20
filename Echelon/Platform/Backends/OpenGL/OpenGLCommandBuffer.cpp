@@ -40,8 +40,19 @@ namespace Echelon {
             for (uint32_t i = 0; i < static_cast<uint32_t>(desc.ColorAttachments.size()); ++i) {
                 const auto& att = desc.ColorAttachments[i];
                 if (att.Load == LoadOp::Clear) {
-                    GLfloat color[4] = { att.Clear.R, att.Clear.G, att.Clear.B, att.Clear.A };
-                    glClearBufferfv(GL_COLOR, i, color);
+                    if (IsIntegerFormat(att.Format)) {
+                        // Integer color targets (e.g. entity-id / picking buffers) must be
+                        // cleared with the integer path; the clear value is carried in the
+                        // float ClearColor and reinterpreted as unsigned integers.
+                        GLuint v[4] = {
+                            static_cast<GLuint>(att.Clear.R), static_cast<GLuint>(att.Clear.G),
+                            static_cast<GLuint>(att.Clear.B), static_cast<GLuint>(att.Clear.A)
+                        };
+                        glClearBufferuiv(GL_COLOR, i, v);
+                    } else {
+                        GLfloat color[4] = { att.Clear.R, att.Clear.G, att.Clear.B, att.Clear.A };
+                        glClearBufferfv(GL_COLOR, i, color);
+                    }
                 }
             }
 

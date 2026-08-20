@@ -97,6 +97,16 @@ namespace Echelon {
         Ref<Texture> GetOutput(const std::string& resourceName) const;
 
         /**
+         * @brief Read back a single texel of a managed color resource (editor / debug).
+         *
+         * Locates the pass that produces @p resourceName and reads the texel from its
+         * framebuffer attachment. @p x / @p y use the backend's native origin. Returns
+         * false if the resource is unknown, is a depth attachment, or has no framebuffer.
+         */
+        bool ReadResourcePixel(const std::string& resourceName, uint32_t x, uint32_t y,
+                               void* out, uint32_t outSize) const;
+
+        /**
          * @brief Redirect any pass that writes `$backbuffer` into an offscreen
          *        framebuffer instead of the window's default framebuffer.
          *
