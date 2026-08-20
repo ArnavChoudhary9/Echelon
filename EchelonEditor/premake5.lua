@@ -17,9 +17,9 @@ project "EchelonEditor"
         "../Echelon/Application/EntryPoint.cpp",
     }
 
-    includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
+    includedirs { "%{wks.location}", "%{wks.location}/Echelon", "%{wks.location}/EchelonEditor" }
     includedirs { Dep.ImGUI.include, Dep.ImGUI.backends }
-    UseDeps("spdlog", "glm", "entt", "yaml", "uuid", "tinyobjloader")
+    UseDeps("spdlog", "glm", "entt", "yaml", "uuid", "tinyobjloader", "stb")
 
     -- The editor calls ImGui:: directly (dockspace + panels). The symbols live in
     -- libEchelon (whole-archived core + backends), so only the headers are needed
@@ -82,6 +82,10 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
+            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            "{MKDIR} %{cfg.buildtarget.directory}\\EditorResources\\Icons",
+            ("xcopy /Y /Q \"%{wks.location}\\EchelonEditor\\Resources\\Icons\\*.png\" \"%{cfg.buildtarget.directory}\\EditorResources\\Icons\\\""),
+            ("IF NOT EXIST \"%{cfg.buildtarget.directory}\\imgui.ini\" copy /Y \"%{wks.location}\\EchelonEditor\\Resources\\imgui.ini\" \"%{cfg.buildtarget.directory}\\imgui.ini\""),
         }
 
     filter "system:linux"
@@ -117,6 +121,10 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
+            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
+            "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
+            ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 
     filter "system:macosx"
@@ -148,6 +156,10 @@ project "EchelonEditor"
             "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
             -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
+            -- Copy editor resources: icons always (overwrite), imgui.ini only on first build.
+            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
+            "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
+            ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 
     filter {}

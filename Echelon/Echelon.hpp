@@ -16,6 +16,7 @@
 
 // --- Events ---
 #include "Events/Event.hpp"
+#include "Events/EventBus.hpp"          // core pub/sub message bus (any-type)
 #include "Events/ApplicationEvent.hpp"
 #include "Events/KeyEvents.hpp"
 #include "Events/MouseEvent.hpp"

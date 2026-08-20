@@ -1,12 +1,14 @@
 #include "Echelon/Echelon.hpp"
-#include "EditorOverlay.hpp"
+#include "EditorLayer.hpp"
 
 using namespace Echelon;
 
 class EchelonEditor : public Application {
 public:
     EchelonEditor(ApplicationConfig& config) : Application(config) {
-        PushOverlay(CreateRef<EditorOverlay>());
+        // EditorLayer is the coordinator overlay; it spawns the panel overlays
+        // (Toolbar/Viewport/Hierarchy/Inspector/Stats) in its OnAttach.
+        PushOverlay(CreateRef<EditorLayer>());
     }
 };
 
