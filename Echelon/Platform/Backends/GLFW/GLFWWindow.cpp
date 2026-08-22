@@ -93,6 +93,11 @@ namespace Echelon {
         return glfwWindowShouldClose(m_Window);
     }
 
+    void GLFWWindow::SetShouldClose(bool shouldClose)
+    {
+        glfwSetWindowShouldClose(m_Window, shouldClose ? GLFW_TRUE : GLFW_FALSE);
+    }
+
     double GLFWWindow::GetTime() const
     {
         return glfwGetTime();

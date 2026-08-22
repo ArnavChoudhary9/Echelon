@@ -127,7 +127,16 @@ namespace Echelon {
         void Close() { m_Running = false; }
 
         // Event Handlers
-        bool OnWindowClose(WindowCloseEvent&) { m_Running = false; return true; };
+        bool OnWindowClose(WindowCloseEvent& e) {
+            // If a layer already handled (vetoed) the close, cancel the OS close
+            // request and keep the run loop alive. Otherwise, shut down gracefully.
+            if (e.Handled) {
+                if (m_Window) m_Window->SetShouldClose(false);
+                return true;
+            }
+            m_Running = false;
+            return true;
+        };
 
     protected:
         bool m_Running = true;

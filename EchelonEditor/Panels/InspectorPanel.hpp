@@ -12,11 +12,14 @@
 #include "EditorContext.hpp"
 
 #include <entt/entt.hpp>
+#include <cstring>
 
 class InspectorPanel : public Panel {
 public:
     explicit InspectorPanel(Ref<EditorContext> ctx)
-        : Panel("Inspector"), m_Ctx(std::move(ctx)) {}
+        : Panel("Inspector"), m_Ctx(std::move(ctx)) {
+        m_Closable = false;   // essential panel — no close [x]
+    }
 
 protected:
     void OnDraw() override {
@@ -28,8 +31,14 @@ protected:
             return;
         }
 
-        if (auto* tag = registry->try_get<TagComponent>(sel))
-            ImGui::Text("%s", tag->Tag.c_str());
+        if (auto* tag = registry->try_get<TagComponent>(sel)) {
+            char buffer[256];
+            std::memset(buffer, 0, sizeof(buffer));
+            std::strncpy(buffer, tag->Tag.c_str(), sizeof(buffer) - 1);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputText("##Tag", buffer, sizeof(buffer)))
+                tag->Tag = buffer;
+        }
         ImGui::Separator();
 
         if (auto* t = registry->try_get<TransformComponent>(sel)) {

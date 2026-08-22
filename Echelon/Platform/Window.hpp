@@ -101,6 +101,14 @@ namespace Echelon {
         virtual bool ShouldClose() const = 0;
 
         /**
+         * @brief Set / clear the window's close-request flag.
+         *
+         * Passing false cancels a pending OS close request — used to veto a window
+         * close (e.g. an editor's unsaved-changes prompt) so the run loop keeps going.
+         */
+        virtual void SetShouldClose(bool shouldClose) = 0;
+
+        /**
          * @brief Retrieve the platform-native window handle.
          *
          * The handle type is platform-specific:

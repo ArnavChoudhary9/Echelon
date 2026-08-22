@@ -163,10 +163,13 @@ namespace Echelon {
 
     void Application::OnEvent(Event& event) {
 
+        // Layers/overlays get first crack so they can VETO a window close (e.g. the
+        // editor showing an unsaved-changes prompt). A layer marks the event Handled
+        // to cancel the shutdown; OnWindowClose below then leaves m_Running untouched.
+        m_LayerStack.OnEvent(event);
+
         EventDispatcher dispatcher(event);
         dispatcher.Dispatch<WindowCloseEvent>(EH_BIND_EVENT_FN(OnWindowClose));
-
-        m_LayerStack.OnEvent(event);
     };
     
     void Application::OnEvent(Event&& event) {

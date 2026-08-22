@@ -50,12 +50,12 @@ public:
         // ---- Fonts (must be loaded before the first BeginFrame builds the atlas) ----
         {
             ImGuiIO& io = ImGui::GetIO();
-            io.Fonts->AddFontFromFileTTF("EditorResources/Fonts/opensans/OpenSans-Bold.ttf", 24.0f);
+            io.Fonts->AddFontFromFileTTF("EditorResources/Fonts/opensans/OpenSans-Bold.ttf", 28.0f);
             io.FontDefault = io.Fonts->AddFontFromFileTTF(
-                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 24.0f);
+                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 28.0f);
             // Larger variant for the content browser labels.
             m_Ctx->FontLarge = io.Fonts->AddFontFromFileTTF(
-                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 28.0f);
+                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 32.0f);
         }
 
         // ---- Load or create scene ----
@@ -117,11 +117,9 @@ public:
     }
 
     virtual void OnDetach() override {
-        // Never persist play-mode changes: the edit scene is authoritative and is
-        // never mutated during play, so saving it is always the correct state.
-        auto project = Application::Get().GetProject();
-        if (project)
-            project->SaveScene();
+        // Saving on exit is NOT automatic: the exit-confirmation modal (see
+        // DrawExitModal) is responsible for persisting the scene when the user asks.
+        // Closing without saving must discard changes, so nothing is written here.
         m_CmdSub.Reset();
         m_SelSub.Reset();
         m_Ctx = nullptr;
@@ -153,6 +151,14 @@ public:
 
     virtual void OnEvent(Event& event) override {
         EventDispatcher dispatcher(event);
+
+        // Intercept the window-close request: veto the immediate shutdown (return
+        // true = Handled) and raise the confirm modal instead. The app cancels the
+        // OS close when it sees the event was handled (Application::OnWindowClose).
+        dispatcher.Dispatch<WindowCloseEvent>([this](WindowCloseEvent&) {
+            m_ExitRequested = true;
+            return true;
+        });
 
         // Accumulate mouse delta whenever the camera is active (Alt or free-cam),
         // regardless of which panel is hovered. Edit mode only.
@@ -211,7 +217,7 @@ public:
                     if (auto project = Application::Get().GetProject()) project->SaveScene();
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Exit")) Application::Get().Close();
+                if (ImGui::MenuItem("Exit")) m_ExitRequested = true;   // routed through the confirm modal
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("View")) {
@@ -239,10 +245,52 @@ public:
         ImGui::End();
     }
 
-    virtual void OnImGUIRender() override {}
+    virtual void OnImGUIRender() override { DrawExitModal(); }
     virtual void OnImGUIEnd()    override {}
 
 private:
+    // ------------------------------------------------------------------
+    // Exit confirmation (replaces the old silent save-on-exit)
+    // ------------------------------------------------------------------
+    void DrawExitModal() {
+        static constexpr const char* kPopup = "Exit Echelon?";
+        if (!m_ExitRequested) return;
+
+        if (!ImGui::IsPopupOpen(kPopup))
+            ImGui::OpenPopup(kPopup);
+
+        const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (ImGui::BeginPopupModal(kPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Save changes to the scene before exiting?");
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            auto doClose = [] { Application::Get().Close(); };
+
+            if (ImGui::Button("Save & Exit", ImVec2(150, 0))) {
+                if (auto project = Application::Get().GetProject()) project->SaveScene();
+                m_ExitRequested = false;
+                ImGui::CloseCurrentPopup();
+                doClose();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Exit without Saving", ImVec2(190, 0))) {
+                m_ExitRequested = false;
+                ImGui::CloseCurrentPopup();
+                doClose();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                m_ExitRequested = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
     // ------------------------------------------------------------------
     // Transport (bus command handler)
     // ------------------------------------------------------------------
@@ -337,8 +385,19 @@ private:
                 auto camView = registry->view<CameraComponent, TransformComponent>();
                 for (auto&& [entity, cc, tc] : camView.each()) {
                     if (cc.Primary) {
-                        cc.Cam.SetPosition(tc.Position);
-                        cc.Cam.SetRotation(tc.Rotation);
+                        // TransformComponent is LOCAL — resolve the camera's world TRS so
+                        // a camera parented under a moving pivot renders from the right
+                        // viewpoint (a root camera decomposes back to its own transform).
+                        glm::vec3 wpos, wrot, wscale;
+                        Entity camEntity = m_Ctx->ActiveScene->FindEntityByUUID(
+                            registry->get<IDComponent>(entity).ID);
+                        if (m_Ctx->ActiveScene->GetWorldTRS(camEntity, wpos, wrot, wscale)) {
+                            cc.Cam.SetPosition(wpos);
+                            cc.Cam.SetRotation(wrot);
+                        } else {
+                            cc.Cam.SetPosition(tc.Position);
+                            cc.Cam.SetRotation(tc.Rotation);
+                        }
                         viewMatrix = cc.Cam.GetViewMatrix();
                         projMatrix = cc.Cam.GetProjectionMatrix();
                         break;
@@ -600,4 +659,7 @@ private:
     uint32_t m_LastViewportW = 0;
     uint32_t m_LastViewportH = 0;
     bool     m_DockLayoutInit = false;
+
+    // Exit-confirmation modal state (set by the menu "Exit" or a window-close veto).
+    bool     m_ExitRequested = false;
 };

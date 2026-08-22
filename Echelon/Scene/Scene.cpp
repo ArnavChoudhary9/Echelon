@@ -1,7 +1,11 @@
 #include "Scene.hpp"
 #include "ECS/Components.hpp"
+#include "Scene/TransformUtils.hpp"
+
+#include "glm/gtc/matrix_transform.hpp"
 
 #include <algorithm>
+#include <vector>
 
 namespace Echelon {
 
@@ -50,6 +54,30 @@ namespace Echelon {
         m_SceneGraph.MarkDirty();
     }
 
+    void Scene::DestroyEntity(Entity entity, bool destroyChildren) {
+        if (!entity)
+            return;
+
+        // Unlink from the parent's child list so no dangling UUID remains.
+        DetachFromParent(entity);
+
+        // Snapshot children before mutating — destroying entities swap-and-pops the
+        // component pools, which would invalidate the live Children reference.
+        std::vector<UUID> children = entity.GetComponent<RelationshipComponent>().Children;
+        for (const auto& childUUID : children) {
+            Entity childEntity = FindEntityByUUID(childUUID);
+            if (!childEntity)
+                continue;
+            if (destroyChildren)
+                DestroyEntity(childEntity, true);       // recurse: remove the whole subtree
+            else
+                DetachFromParent(childEntity);          // promote surviving children to root
+        }
+
+        m_EntityRegistry->destroy(static_cast<entt::entity>(entity));
+        m_SceneGraph.MarkDirty();
+    }
+
     void Scene::Clear() {
         m_EntityRegistry->clear();
         m_SceneGraph.MarkDirty();
@@ -58,22 +86,92 @@ namespace Echelon {
     // ------------------------------------------------------------------
     // Hierarchy helpers
     // ------------------------------------------------------------------
-    void Scene::SetParent(Entity child, Entity parent) {
+    bool Scene::SetParent(Entity child, Entity parent) {
+        if (!child || !parent)
+            return false;
+
+        // Reject cycles: parenting under self or one of the child's descendants would
+        // corrupt the graph and hang any hierarchy traversal.
+        if (IsAncestorOf(child, parent))
+            return false;
+
+        // Detach from any previous parent first so the child is never listed twice.
+        DetachFromParent(child);
+
         auto childUUID  = child.GetComponent<IDComponent>().ID;
         auto parentUUID = parent.GetComponent<IDComponent>().ID;
 
-        // Update child's relationship
-        auto& childRC   = child.GetComponent<RelationshipComponent>();
-        childRC.Parent  = parentUUID;
+        child.GetComponent<RelationshipComponent>().Parent = parentUUID;
 
-        // Add child to parent's children list (avoid duplicates)
         auto& parentRC = parent.GetComponent<RelationshipComponent>();
-        auto it = std::find(parentRC.Children.begin(), parentRC.Children.end(), childUUID);
-        if (it == parentRC.Children.end()) {
+        if (std::find(parentRC.Children.begin(), parentRC.Children.end(), childUUID)
+                == parentRC.Children.end()) {
             parentRC.Children.push_back(childUUID);
         }
 
         m_SceneGraph.MarkDirty();
+        return true;
+    }
+
+    void Scene::ReparentKeepingWorldTransform(Entity child, Entity newParent) {
+        if (!child)
+            return;
+        // Bail on cycles before touching the transform so we never leave the child in
+        // a half-reparented state.
+        if (newParent && IsAncestorOf(child, newParent))
+            return;
+
+        const glm::mat4 childWorld = GetWorldTransform(child);
+
+        glm::mat4 newLocal;
+        if (newParent) {
+            const glm::mat4 parentWorld = GetWorldTransform(newParent);
+            newLocal = glm::inverse(parentWorld) * childWorld;
+        } else {
+            newLocal = childWorld;   // detaching to root: local space == world space
+        }
+
+        DecomposeToTransform(newLocal, child.GetComponent<TransformComponent>());
+
+        if (newParent)
+            SetParent(child, newParent);
+        else
+            DetachFromParent(child);
+    }
+
+    glm::mat4 Scene::GetWorldTransform(Entity entity) {
+        if (!entity)
+            return glm::mat4(1.0f);
+        return ComputeWorldTransform(*m_EntityRegistry, static_cast<entt::entity>(entity));
+    }
+
+    bool Scene::GetWorldTRS(Entity entity, glm::vec3& position, glm::vec3& eulerDegrees, glm::vec3& scale) {
+        if (!entity)
+            return false;
+        TransformComponent world;
+        DecomposeToTransform(GetWorldTransform(entity), world);
+        position     = world.Position;
+        eulerDegrees = world.Rotation;
+        scale        = world.Scale;
+        return true;
+    }
+
+    bool Scene::IsAncestorOf(Entity ancestor, Entity node) {
+        if (!ancestor || !node)
+            return false;
+
+        const UUID ancestorUUID = ancestor.GetComponent<IDComponent>().ID;
+        Entity cur = node;
+        int guard = 0;
+        while (cur && guard++ < 4096) {
+            if (cur.GetComponent<IDComponent>().ID == ancestorUUID)
+                return true;
+            auto& rc = cur.GetComponent<RelationshipComponent>();
+            if (!rc.Parent.has_value())
+                break;
+            cur = FindEntityByUUID(*rc.Parent);
+        }
+        return false;
     }
 
     void Scene::DetachFromParent(Entity entity) {

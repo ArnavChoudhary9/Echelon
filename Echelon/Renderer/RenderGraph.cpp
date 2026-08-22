@@ -2,6 +2,7 @@
 
 #include "Scene/Scene.hpp"
 #include "ECS/Components.hpp"
+#include "Scene/TransformUtils.hpp"
 #include "GraphicsAPI/Pipeline.hpp"
 #include "Asset/AssetManager.hpp"
 #include "Asset/Mesh/Mesh.hpp"
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <functional>
 #include <cstring>
+#include <unordered_map>
 
 namespace Echelon {
 
@@ -47,11 +49,14 @@ namespace Echelon {
         auto registry = scene->GetEntityRegistry().lock();
         if (!registry) return version;
 
-        // Hash mesh versions + transform data + material versions
-        auto view = registry->view<IDComponent, MeshComponent, TransformComponent>();
-        for (auto&& [entity, id, mc, tc] : view.each()) {
+        // Hash EVERY entity that carries a transform — not just renderables. A child's
+        // world transform depends on its ancestors, and those ancestors may be empty
+        // pivot entities with no mesh; folding all transforms in (plus each entity's
+        // parent link) guarantees a rebuild whenever an ancestor moves or the hierarchy
+        // is re-parented.
+        auto view = registry->view<IDComponent, TransformComponent>();
+        for (auto&& [entity, id, tc] : view.each()) {
             version = HashCombine(version, id.ID.Hash());
-            version = HashCombine(version, mc.Version);
 
             // Include transform in version (bit-cast floats)
             uint32_t px, py, pz, rx, ry, rz, sx, sy, sz;
@@ -62,11 +67,17 @@ namespace Echelon {
             version = HashCombine(version, rx); version = HashCombine(version, ry); version = HashCombine(version, rz);
             version = HashCombine(version, sx); version = HashCombine(version, sy); version = HashCombine(version, sz);
 
-            // Include material version if present
-            if (registry->all_of<MaterialComponent>(entity)) {
-                const auto& mat = registry->get<MaterialComponent>(entity);
-                version = HashCombine(version, mat.Version);
-                version = HashCombine(version, mat.GetPipelineSortKey());
+            // Fold in the parent link so re-parenting forces a rebuild.
+            if (const auto* rel = registry->try_get<RelationshipComponent>(entity))
+                if (rel->Parent.has_value())
+                    version = HashCombine(version, rel->Parent->Hash());
+
+            // Include mesh + material versions for renderables.
+            if (const auto* mc = registry->try_get<MeshComponent>(entity))
+                version = HashCombine(version, mc->Version);
+            if (const auto* mat = registry->try_get<MaterialComponent>(entity)) {
+                version = HashCombine(version, mat->Version);
+                version = HashCombine(version, mat->GetPipelineSortKey());
             }
         }
 
@@ -146,13 +157,6 @@ namespace Echelon {
         }
     }
 
-    static glm::mat4 ComposeTransform(const TransformComponent& tc) {
-        glm::mat4 t = glm::translate(glm::mat4(1.0f), tc.Position);
-        glm::mat4 r = glm::toMat4(glm::quat(glm::radians(tc.Rotation)));
-        glm::mat4 s = glm::scale(glm::mat4(1.0f), tc.Scale);
-        return t * r * s;
-    }
-
     void RenderGraph::Rebuild(const Ref<Scene>& scene,
                                const Ref<Pipeline>& defaultPipeline,
                                const Ref<Pipeline>& errorPipeline) {
@@ -160,6 +164,36 @@ namespace Echelon {
 
         auto registry = scene->GetEntityRegistry().lock();
         if (!registry) return;
+
+        // ---- World-transform resolution (hierarchy composition) ----------------
+        // A TransformComponent is LOCAL to its parent, so a renderable's world matrix
+        // is the product of its ancestors' local transforms. Ancestors may be empty
+        // pivot entities (no mesh), so resolve by walking parent UUIDs. Results are
+        // memoized; a provisional identity is written before recursing so a corrupt
+        // cyclic hierarchy terminates instead of overflowing the stack.
+        std::unordered_map<UUID, entt::entity> byUuid;
+        for (auto&& [e, id] : registry->view<IDComponent>().each())
+            byUuid[id.ID] = e;
+
+        std::unordered_map<entt::entity, glm::mat4> worldCache;
+        std::function<glm::mat4(entt::entity)> worldOf = [&](entt::entity e) -> glm::mat4 {
+            if (auto it = worldCache.find(e); it != worldCache.end())
+                return it->second;
+            worldCache[e] = glm::mat4(1.0f);   // provisional — breaks accidental cycles
+
+            const auto* tc = registry->try_get<TransformComponent>(e);
+            glm::mat4 world = tc ? ComposeLocalTransform(*tc) : glm::mat4(1.0f);
+
+            const auto* rel = registry->try_get<RelationshipComponent>(e);
+            if (rel && rel->Parent.has_value()) {
+                auto pit = byUuid.find(*rel->Parent);
+                if (pit != byUuid.end() && pit->second != e)
+                    world = worldOf(pit->second) * world;
+            }
+
+            worldCache[e] = world;
+            return world;
+        };
 
         // Iterate all entities with both a MeshComponent and TransformComponent
         auto view = registry->view<IDComponent, MeshComponent, TransformComponent>();
@@ -204,7 +238,7 @@ namespace Echelon {
             cmd.IndexBuffer  = mc.RuntimeMesh->GetIndexBuffer();
             cmd.VertexCount  = mc.RuntimeMesh->GetVertexCount();
             cmd.IndexCount   = mc.RuntimeMesh->GetIndexCount();
-            cmd.Transform    = ComposeTransform(tc);
+            cmd.Transform    = worldOf(entity);   // parent chain composed → world matrix
 
             // Material resolution:
             //  - No MaterialComponent          → renderer's defaultPipeline (draw normally)

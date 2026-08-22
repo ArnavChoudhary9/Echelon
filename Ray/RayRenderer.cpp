@@ -1012,15 +1012,30 @@ namespace Echelon {
                 if (!light.Enabled) continue;   // soft-disabled lights contribute nothing
                 const auto& tc    = view.get<TransformComponent>(entity);
 
-                // Rotation (euler radians) → forward direction; default facing -Z.
+                // Rotation (euler radians) → forward direction; default facing -Z. This
+                // is the light's LOCAL facing (relative to its parent).
                 const glm::vec3 euler = glm::radians(tc.Rotation);
-                glm::vec3 dir = glm::normalize(glm::vec3(
+                glm::vec3 localDir = glm::normalize(glm::vec3(
                     -glm::sin(euler.y) * glm::cos(euler.x),
                      glm::sin(euler.x),
                     -glm::cos(euler.y) * glm::cos(euler.x)));
 
+                // Hierarchy-aware world placement: TransformComponent is LOCAL, so the
+                // light's world position is the world-matrix translation, and its world
+                // facing is the parent's world rotation applied to the local forward.
+                // Root (unparented) lights are unaffected (parentWorld == identity).
+                Entity    lightEntity = scene->FindEntityByUUID(registry->get<IDComponent>(entity).ID);
+                glm::vec3 pos = glm::vec3(scene->GetWorldTransform(lightEntity)[3]);
+                glm::vec3 dir = localDir;
+                if (const auto* rel = registry->try_get<RelationshipComponent>(entity);
+                        rel && rel->Parent.has_value()) {
+                    Entity parentEntity = scene->FindEntityByUUID(*rel->Parent);
+                    if (parentEntity)
+                        dir = glm::normalize(glm::mat3(scene->GetWorldTransform(parentEntity)) * localDir);
+                }
+
                 GpuLightCPU& g = lc.Lights[count];
-                g.Position   = glm::vec4(tc.Position, static_cast<float>(light.Type));
+                g.Position   = glm::vec4(pos, static_cast<float>(light.Type));
                 g.Direction  = glm::vec4(dir, light.Range);
                 g.Color      = glm::vec4(light.Color, light.Intensity);
                 g.SpotParams = glm::vec4(light.CosInner(), light.CosOuter(), 0.0f, 0.0f);
@@ -1030,10 +1045,10 @@ namespace Echelon {
                     if (light.Type == LightType::Directional && m_DirCaster.Index < 0) {
                         m_DirCaster.Index = count; m_DirCaster.Direction = dir; m_DirCaster.Bias = light.ShadowBias;
                     } else if (light.Type == LightType::Spot && m_SpotCaster.Index < 0) {
-                        m_SpotCaster.Index = count; m_SpotCaster.Position = tc.Position; m_SpotCaster.Direction = dir;
+                        m_SpotCaster.Index = count; m_SpotCaster.Position = pos; m_SpotCaster.Direction = dir;
                         m_SpotCaster.Range = light.Range; m_SpotCaster.CosOuter = light.CosOuter(); m_SpotCaster.Bias = light.ShadowBias;
                     } else if (light.Type == LightType::Point && m_PointCaster.Index < 0) {
-                        m_PointCaster.Index = count; m_PointCaster.Position = tc.Position;
+                        m_PointCaster.Index = count; m_PointCaster.Position = pos;
                         m_PointCaster.Range = light.Range; m_PointCaster.Bias = light.ShadowBias;
                     }
                 }

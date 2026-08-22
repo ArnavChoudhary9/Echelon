@@ -16,6 +16,7 @@ public:
     explicit ContentBrowserPanel(Ref<EditorContext> ctx)
         : Panel("Content Browser"), m_Ctx(std::move(ctx))
     {
+        m_Closable = false;   // essential panel — no close [x]
         auto project = Application::Get().GetProject();
         m_RootPath    = project ? project->GetRootDirectory() : fs::current_path();
         m_CurrentPath = m_RootPath;
@@ -85,8 +86,8 @@ private:
 
     // ---- Grid contents -------------------------------------------------
     void DrawContents() {
-        const float iconSz   = 72.0f;
-        const float colW     = iconSz + 28.0f;  // fixed column width inc. gutters
+        const float iconSz   = 110.0f;
+        const float colW     = iconSz + 36.0f;  // fixed column width inc. gutters
         const float panelW   = ImGui::GetContentRegionAvail().x;
         const int   cols     = std::max(1, static_cast<int>(panelW / colW));
 

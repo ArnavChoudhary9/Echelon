@@ -49,6 +49,7 @@ namespace Echelon {
         uint32_t           GetHeight()       const override { return m_Data.Height; }
         const std::string& GetTitle()        const override { return m_Data.Title; }
         bool               ShouldClose()     const override;
+        void               SetShouldClose(bool shouldClose) override;
         void*              GetNativeHandle() const override { return static_cast<void*>(m_Window); }
 
         // ---- Configuration ----
