@@ -39,6 +39,17 @@ public:
             ImGui::Image(static_cast<ImTextureID>(tex->GetNativeHandle()),
                          avail, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
 
+            // Drop scene/mesh assets onto the viewport.
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("DND_SCENE"))
+                    PublishEvent(SceneLoadRequestedEvent{
+                        std::string(static_cast<const char*>(p->Data)) });
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("DND_MESH"))
+                    PublishEvent(MeshSpawnRequestedEvent{
+                        std::string(static_cast<const char*>(p->Data)) });
+                ImGui::EndDragDropTarget();
+            }
+
             // Left-click without the camera active picks the entity under the cursor.
             if (renderer && !m_Ctx->CameraActive()
                 && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {

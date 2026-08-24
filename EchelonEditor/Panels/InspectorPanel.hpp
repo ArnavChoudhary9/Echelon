@@ -34,7 +34,12 @@
 #include <cstring>
 #include <cstdint>
 #include <string>
+#include <vector>
+#include <unordered_map>
+#include <filesystem>
 #include <typeinfo>
+
+namespace fs = std::filesystem;
 
 class InspectorPanel : public Panel {
 public:
@@ -137,10 +142,8 @@ private:
                 ImGui::DragFloat("Shadow Bias", &c.ShadowBias, 0.0001f, 0.0f, 0.1f, "%.4f");
         });
 
-        DrawComponent<MeshComponent>("Mesh", entity, [](auto& c) {
-            // Editing the source clears the (possibly stale) handle and forces a
-            // fresh resolve next frame — see RenderGraph mesh resolution.
-            if (DrawAssetSourceField("Source", c.MeshSource)) {
+        DrawComponent<MeshComponent>("Mesh", entity, [this](auto& c) {
+            if (DrawSourceField(c.MeshSource, "DND_MESH", m_MeshOptions)) {
                 c.MeshHandle   = UUID::Null();
                 c.ResolveEpoch = UINT64_MAX;
                 c.Invalidate();
@@ -148,13 +151,53 @@ private:
             ImGui::TextDisabled(c.IsValid() ? "resolved" : "unresolved");
         });
 
-        DrawComponent<MaterialComponent>("Material", entity, [](auto& c) {
-            if (DrawAssetSourceField("Source", c.MaterialSource)) {
+        DrawComponent<MaterialComponent>("Material", entity, [this](auto& c) {
+            if (DrawSourceField(c.MaterialSource, "DND_MATERIAL", m_MaterialOptions)) {
                 c.MaterialHandle = UUID::Null();
                 c.ResolveEpoch   = UINT64_MAX;
                 c.Invalidate();
             }
             ImGui::TextDisabled(c.RuntimeMaterial ? "resolved" : "unresolved (default pipeline)");
+
+            if (c.RuntimeMaterial) {
+                constexpr ImGuiTableFlags kTF =
+                    ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV;
+                const float kLabelW = ImGui::GetFontSize() * 6.0f;
+
+                // Snapshot version so we can detect any param/texture edit below.
+                const uint64_t versionBefore = c.Version;
+
+                if (!c.RuntimeMaterial->Params.empty()) {
+                    ImGui::Spacing();
+                    ImGui::SeparatorText("Parameters");
+                    if (ImGui::BeginTable("##mparams", 2, kTF)) {
+                        ImGui::TableSetupColumn("##L", ImGuiTableColumnFlags_WidthFixed, kLabelW);
+                        ImGui::TableSetupColumn("##V", ImGuiTableColumnFlags_WidthStretch);
+                        for (auto& [pname, pbase] : c.RuntimeMaterial->Params)
+                            DrawMaterialParamRow(pname, pbase, c.Overrides, c.Version);
+                        ImGui::EndTable();
+                    }
+                }
+                if (!c.RuntimeMaterial->Textures.empty()) {
+                    ImGui::Spacing();
+                    ImGui::SeparatorText("Textures");
+                    if (ImGui::BeginTable("##mtex", 2, kTF)) {
+                        ImGui::TableSetupColumn("##L", ImGuiTableColumnFlags_WidthFixed, kLabelW);
+                        ImGui::TableSetupColumn("##V", ImGuiTableColumnFlags_WidthStretch);
+                        for (auto& [slot, path] : c.RuntimeMaterial->Textures)
+                            DrawTextureRow(slot, path, c.Version);
+                        ImGui::EndTable();
+                    }
+                }
+
+                // ResolveMaterial guards with (ResolveEpoch == epoch) → early-exit.
+                // ++Version alone dirties the scene hash and triggers Rebuild(), but
+                // ResolveMaterial still skips because ResolveEpoch matches the current
+                // epoch from last frame.  Setting UINT64_MAX breaks the guard so the
+                // next Rebuild() forces a full re-resolve with the updated Overrides.
+                if (c.Version != versionBefore)
+                    c.ResolveEpoch = UINT64_MAX;
+            }
         });
     }
 
@@ -162,7 +205,8 @@ private:
     // Header: entity name + "Add Component" popup
     // ==================================================================
     void DrawTagAndAddButton(Entity entity) {
-        constexpr float addBtnW = 120.0f;
+        const float addBtnW = ImGui::CalcTextSize("Add Component").x
+                            + ImGui::GetStyle().FramePadding.x * 2.0f + 4.0f;
 
         if (entity.HasComponent<TagComponent>()) {
             auto& tag = entity.GetComponent<TagComponent>().Tag;
@@ -292,16 +336,226 @@ private:
         }
     }
 
-    /** @brief Editable text field bound to an asset source string; returns true on change. */
-    static bool DrawAssetSourceField(const char* label, std::string& source) {
-        char buffer[256];
-        std::memset(buffer, 0, sizeof(buffer));
-        std::strncpy(buffer, source.c_str(), sizeof(buffer) - 1);
-        if (ImGui::InputText(label, buffer, sizeof(buffer))) {
-            source = buffer;
-            return true;
+    /** @brief Source path field: label | input+DnD | dropdown picker. */
+    bool DrawSourceField(std::string& source, const char* dndType,
+                         std::vector<std::string>& options) {
+        bool changed    = false;
+        bool openPicker = false;
+        ImGui::PushID(dndType);
+
+        if (ImGui::BeginTable("##sf", 2, ImGuiTableFlags_SizingFixedFit)) {
+            ImGui::TableSetupColumn("##L", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("##V", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted("Source");
+            ImGui::TableSetColumnIndex(1);
+
+            const float btnW = ImGui::GetFrameHeight();
+            ImGui::SetNextItemWidth(
+                ImGui::GetContentRegionAvail().x - btnW - ImGui::GetStyle().ItemSpacing.x);
+
+            char buf[256] = {};
+            std::strncpy(buf, source.c_str(), sizeof(buf) - 1);
+            if (ImGui::InputText("##src", buf, sizeof(buf))) {
+                source = buf; changed = true;
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(dndType)) {
+                    source = static_cast<const char*>(p->Data); changed = true;
+                }
+                ImGui::EndDragDropTarget();
+            }
+            ImGui::SameLine();
+            // Store the click result — do NOT call OpenPopup here.
+            // BeginTable pushes its own ID scope, so a popup opened inside it
+            // gets a different full ID than one opened outside → popup never shows.
+            openPicker = ImGui::ArrowButton("##pick", ImGuiDir_Down);
+            ImGui::EndTable();
         }
-        return false;
+
+        // Both OpenPopup and BeginPopup must share the same ID scope (PushID(dndType)).
+        if (openPicker) {
+            RefreshAssetCache();
+            ImGui::OpenPopup("##opts");
+        }
+        if (ImGui::BeginPopup("##opts")) {
+            if (options.empty()) {
+                ImGui::TextDisabled("(no assets found)");
+            } else {
+                for (const auto& opt : options) {
+                    const bool sel = (source == opt);
+                    if (ImGui::Selectable(opt.c_str(), sel)) {
+                        source = opt; changed = true; ImGui::CloseCurrentPopup();
+                    }
+                    if (sel) ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::PopID();
+        return changed;
+    }
+
+    void RefreshAssetCache() {
+        m_MeshOptions     = { "Sphere", "Cube", "Plane" };
+        m_MaterialOptions.clear();
+
+        auto project = Application::Get().GetProject();
+        if (!project) return;
+
+        const fs::path root      = project->GetRootDirectory();
+        const fs::path assetsDir = root / "Assets";
+        const fs::path base      = fs::is_directory(assetsDir) ? assetsDir : root;
+        try {
+            for (const auto& e : fs::recursive_directory_iterator(
+                     root, fs::directory_options::skip_permission_denied)) {
+                if (!e.is_regular_file()) continue;
+                const std::string ext = e.path().extension().string();
+                try {
+                    const fs::path rel = fs::relative(e.path(), base);
+                    if (rel.begin() != rel.end() && rel.begin()->string() == "..") continue;
+                    const std::string relStr = rel.string();
+                    if (ext == ".obj" || ext == ".fbx" || ext == ".gltf")
+                        m_MeshOptions.push_back(relStr);
+                    else if (ext == ".ehmaterial")
+                        m_MaterialOptions.push_back(relStr);
+                } catch (...) {}
+            }
+        } catch (...) {}
+    }
+
+    /**
+     * @brief One row inside an active BeginTable("##mparams", 2) block.
+     *        Label column: name (yellow = overridden) + full-name tooltip.
+     *        Value column: type-appropriate editor; color fields use a compact
+     *                      swatch button (NoInputs) that opens a picker popup.
+     *        Inline reset [x] button removes the override and restores base.
+     *        Bumps the component Version on change to force a runtime rebuild.
+     */
+    // version = MaterialComponent::Version — incrementing it makes the renderer's
+    // draw graph detect a dirty component and re-run material resolution, which
+    // rebuilds that entity's override descriptor set from Overrides.
+    static void DrawMaterialParamRow(const std::string& name,
+                                     const MaterialParam& base,
+                                     std::unordered_map<std::string, MaterialParam>& overrides,
+                                     uint64_t& version) {
+        auto it               = overrides.find(name);
+        const bool hasOverride = (it != overrides.end());
+        MaterialParam current  = hasOverride ? it->second : base;
+        bool changed           = false;
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::PushID(name.c_str());
+
+        ImGui::PushStyleColor(ImGuiCol_Text,
+            hasOverride ? ImVec4(0.90f, 0.78f, 0.30f, 1.0f)
+                        : ImVec4(0.75f, 0.75f, 0.75f, 1.0f));
+        ImGui::TextUnformatted(name.c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", name.c_str());
+
+        ImGui::TableSetColumnIndex(1);
+
+        const float fh     = ImGui::GetFrameHeight();
+        const float resetW = hasOverride ? (fh + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
+
+        auto isColorName = [&] {
+            for (const char* tok : { "olor", "lbedo", "missive", "iffuse" })
+                if (name.find(tok) != std::string::npos) return true;
+            return false;
+        };
+        const bool colorField = (current.Type == MaterialParamType::Float3 ||
+                                 current.Type == MaterialParamType::Float4) && isColorName();
+        if (!colorField)
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - resetW);
+
+        switch (current.Type) {
+            case MaterialParamType::Float: {
+                float v = current.Data[0];
+                if (ImGui::DragFloat("##v", &v, 0.01f))
+                    { overrides[name] = MaterialParam::Make(v); changed = true; }
+                break;
+            }
+            case MaterialParamType::Float2: {
+                glm::vec2 v(current.Data[0], current.Data[1]);
+                if (ImGui::DragFloat2("##v", &v.x, 0.01f))
+                    { overrides[name] = MaterialParam::Make(v); changed = true; }
+                break;
+            }
+            case MaterialParamType::Float3: {
+                glm::vec3 v(current.Data[0], current.Data[1], current.Data[2]);
+                bool edit = colorField
+                    ? ImGui::ColorEdit3("##v", &v.x, ImGuiColorEditFlags_NoInputs)
+                    : ImGui::DragFloat3("##v", &v.x, 0.01f);
+                if (edit) { overrides[name] = MaterialParam::Make(v); changed = true; }
+                break;
+            }
+            case MaterialParamType::Float4: {
+                glm::vec4 v(current.Data[0], current.Data[1], current.Data[2], current.Data[3]);
+                bool edit = colorField
+                    ? ImGui::ColorEdit4("##v", &v.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview)
+                    : ImGui::DragFloat4("##v", &v.x, 0.01f);
+                if (edit) { overrides[name] = MaterialParam::Make(v); changed = true; }
+                break;
+            }
+            case MaterialParamType::Int: {
+                int v = static_cast<int>(current.Data[0]);
+                if (ImGui::DragInt("##v", &v))
+                    { overrides[name] = MaterialParam::MakeInt(v); changed = true; }
+                break;
+            }
+            default: ImGui::TextDisabled("(mat4)"); break;
+        }
+
+        if (hasOverride) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.50f, 0.12f, 0.12f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.20f, 0.20f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.50f, 0.10f, 0.10f, 1.0f));
+            if (ImGui::Button("x", ImVec2(fh, fh))) {
+                overrides.erase(name); changed = true;
+            }
+            ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reset to base value");
+        }
+
+        if (changed) ++version;
+        ImGui::PopID();
+    }
+
+    /** @brief One row inside an active BeginTable("##mtex", 2) block.
+     *         Shows the shader texture slot name and an editable path field.
+     *         Accepts DND_IMAGE drag-drop payloads. Editing modifies the shared
+     *         Material asset directly (no per-entity override map for textures yet).
+     *         Increments version to trigger ResolveMaterial on next frame.
+     */
+    static void DrawTextureRow(const std::string& slotName, std::string& texPath,
+                                uint64_t& version) {
+        ImGui::TableNextRow();
+        ImGui::PushID(slotName.c_str());
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.75f, 0.75f, 1.0f));
+        ImGui::TextUnformatted(slotName.c_str());
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", slotName.c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        char buf[256] = {};
+        std::strncpy(buf, texPath.c_str(), sizeof(buf) - 1);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        if (ImGui::InputText("##t", buf, sizeof(buf)))
+            { texPath = buf; ++version; }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("DND_IMAGE"))
+                { texPath = static_cast<const char*>(p->Data); ++version; }
+            ImGui::EndDragDropTarget();
+        }
+
+        ImGui::PopID();
     }
 
     /** @brief One colored, resettable axis button used by DrawVec3Control. */
@@ -316,5 +570,7 @@ private:
         ImGui::PopStyleColor(3);
     }
 
-    Ref<EditorContext> m_Ctx;
+    Ref<EditorContext>       m_Ctx;
+    std::vector<std::string> m_MeshOptions;
+    std::vector<std::string> m_MaterialOptions;
 };

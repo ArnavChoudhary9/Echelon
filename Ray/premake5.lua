@@ -24,7 +24,9 @@ project "Ray"
         "**.cpp",
     }
 
-    includedirs { "%{wks.location}", "%{wks.location}/Echelon" }
+    -- %{wks.location}/Ray lets Ray-internal headers be included by subfolder
+    -- (ABI/RayConstants.hpp, Render/RenderGraph.hpp, Material/RayMaterialCache.hpp).
+    includedirs { "%{wks.location}", "%{wks.location}/Echelon", "%{wks.location}/Ray" }
     UseDeps("glm", "GLFW", "spdlog", "yaml", "entt", "uuid")
 
     -- Ray uses only the engine's GraphicsAPI abstraction — the OpenGL backend

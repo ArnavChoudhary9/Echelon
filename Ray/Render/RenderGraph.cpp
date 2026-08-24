@@ -7,8 +7,7 @@
 #include "Asset/AssetManager.hpp"
 #include "Asset/Mesh/Mesh.hpp"
 #include "Asset/Material/Material.hpp"
-#include "Asset/Material/MaterialInstance.hpp"
-#include "Renderer/RendererService.hpp"
+#include "Material/RayMaterialCache.hpp"   // renderer-owned material→GPU translation
 #include "Core/Log.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -75,10 +74,8 @@ namespace Echelon {
             // Include mesh + material versions for renderables.
             if (const auto* mc = registry->try_get<MeshComponent>(entity))
                 version = HashCombine(version, mc->Version);
-            if (const auto* mat = registry->try_get<MaterialComponent>(entity)) {
+            if (const auto* mat = registry->try_get<MaterialComponent>(entity))
                 version = HashCombine(version, mat->Version);
-                version = HashCombine(version, mat->GetPipelineSortKey());
-            }
         }
 
         return version;
@@ -89,8 +86,11 @@ namespace Echelon {
     // ------------------------------------------------------------------
 
     void RenderGraph::Update(const Ref<Scene>& scene,
+                              RendererAPI* renderer,
+                              RayMaterialCache& cache,
                               const Ref<Pipeline>& defaultPipeline,
-                              const Ref<Pipeline>& errorPipeline) {
+                              const Ref<Pipeline>& errorPipeline,
+                              const Ref<RenderPass>& scenePass) {
         m_WasRebuilt = false;
 
         if (!scene) {
@@ -105,7 +105,7 @@ namespace Echelon {
             return; // Nothing changed — O(1) early-out
         }
 
-        Rebuild(scene, defaultPipeline, errorPipeline);
+        Rebuild(scene, renderer, cache, defaultPipeline, errorPipeline, scenePass);
         SortAndBatch();
 
         m_LastSceneVersion = currentVersion;
@@ -117,49 +117,51 @@ namespace Echelon {
     // Rebuild — flatten scene graph into draw commands
     // ------------------------------------------------------------------
 
-    // Resolve a MaterialComponent's asset reference into a pipeline + descriptor set
-    // (once per epoch). Mirrors the mesh resolution: lazy, self-healing via source.
+    // Resolve a MaterialComponent's asset reference (once per epoch) and, when its
+    // material was (re)resolved — an override edit or an asset epoch bump — (re)build
+    // the per-entity override descriptor set in the renderer's material cache.
+    // Mirrors the mesh resolution: lazy, self-healing via source. Returns the resolved
+    // base material (or null).
     //
     // The engine does NOT invent a material for meshes that have none — applying a
-    // standard or custom material to a loaded mesh is the renderer's/user's job. An
-    // unresolved material leaves PipelineRef null, so the renderer falls back to its
-    // pink error pipeline (a clear "no material applied / something is wrong" signal).
-    static void ResolveMaterial(MaterialComponent& mc, uint64_t epoch) {
-        if (mc.ResolveEpoch == epoch)
-            return;
-        mc.ResolveEpoch = epoch;
-
+    // standard or custom material is the renderer's/user's job. An unresolved material
+    // returns null, so the caller falls back to the renderer's pink error pipeline
+    // (a clear "no material applied / something is wrong" signal).
+    static Ref<Material> ResolveMaterial(uint32_t entityId, MaterialComponent& mc,
+                                         uint64_t epoch, RayMaterialCache& cache,
+                                         RendererAPI* renderer) {
         if (mc.MaterialHandle.IsNull() && mc.MaterialSource.empty())
-            return; // no material applied → renderer's error/pink fallback
+            return nullptr; // no material applied → renderer's error/pink fallback
 
-        auto& assets = AssetManager::Get();
-        UUID handle  = mc.MaterialHandle;
-        Ref<Material> material = handle.IsNull() ? nullptr : assets.GetAssetAs<Material>(handle);
-        if (!material && !mc.MaterialSource.empty()) {
-            handle = assets.GetHandle(mc.MaterialSource);
-            if (!handle.IsNull()) material = assets.GetAssetAs<Material>(handle);
+        if (mc.ResolveEpoch != epoch) {
+            mc.ResolveEpoch = epoch;
+
+            auto& assets = AssetManager::Get();
+            UUID handle  = mc.MaterialHandle;
+            Ref<Material> material = handle.IsNull() ? nullptr : assets.GetAssetAs<Material>(handle);
+            if (!material && !mc.MaterialSource.empty()) {
+                handle = assets.GetHandle(mc.MaterialSource);
+                if (!handle.IsNull()) material = assets.GetAssetAs<Material>(handle);
+            }
+            mc.RuntimeMaterial = material;
+            if (material) mc.MaterialHandle = handle;
+
+            // (Re)build this entity's override set now that its material was resolved.
+            // Sparse per-entity overrides layer over the base material's values.
+            if (material && !mc.Overrides.empty())
+                cache.BuildOverride(entityId, material, mc.Overrides, renderer);
+            else
+                cache.DropOverride(entityId);
         }
-        if (!material)
-            return;
-
-        mc.MaterialHandle  = handle;
-        mc.RuntimeMaterial = material;
-        mc.PipelineRef     = material->GetPipeline();
-
-        // Sparse per-entity overrides form a runtime MaterialInstance.
-        if (!mc.Overrides.empty()) {
-            auto inst = CreateRef<MaterialInstance>(material);
-            for (const auto& [name, value] : mc.Overrides) inst->SetOverride(name, value);
-            inst->Build(Renderer::Get().GetActive());
-            mc.RuntimeInstance = inst;
-        } else {
-            mc.RuntimeInstance = nullptr;
-        }
+        return mc.RuntimeMaterial;
     }
 
     void RenderGraph::Rebuild(const Ref<Scene>& scene,
+                               RendererAPI* renderer,
+                               RayMaterialCache& cache,
                                const Ref<Pipeline>& defaultPipeline,
-                               const Ref<Pipeline>& errorPipeline) {
+                               const Ref<Pipeline>& errorPipeline,
+                               const Ref<RenderPass>& scenePass) {
         m_DrawCommands.clear();
 
         auto registry = scene->GetEntityRegistry().lock();
@@ -240,18 +242,28 @@ namespace Echelon {
             cmd.IndexCount   = mc.RuntimeMesh->GetIndexCount();
             cmd.Transform    = worldOf(entity);   // parent chain composed → world matrix
 
-            // Material resolution:
+            // Material resolution (GPU objects come from the renderer's material cache):
             //  - No MaterialComponent          → renderer's defaultPipeline (draw normally)
-            //  - MaterialComponent resolves     → use the material's own pipeline
+            //  - MaterialComponent resolves     → the material's own pipeline + descriptor set
             //  - MaterialComponent fails        → renderer's errorPipeline (pink / obvious signal)
             cmd.PipelineRef = defaultPipeline;
             if (registry->all_of<MaterialComponent>(entity)) {
                 auto& mat = registry->get<MaterialComponent>(entity);
                 if (!mat.MaterialHandle.IsNull() || !mat.MaterialSource.empty()) {
-                    ResolveMaterial(mat, AssetManager::Get().GetEpoch());
-                    cmd.PipelineRef = mat.PipelineRef ? mat.PipelineRef : errorPipeline;
+                    Ref<Material> resolved = ResolveMaterial(cmd.EntityID, mat,
+                                                             AssetManager::Get().GetEpoch(),
+                                                             cache, renderer);
+                    if (resolved) {
+                        const auto& gpu = cache.GetOrBuild(resolved, renderer, scenePass);
+                        cmd.PipelineRef = gpu.PipelineRef ? gpu.PipelineRef : errorPipeline;
+                        // Per-entity override set if any; otherwise the material's base set.
+                        Ref<DescriptorSet> ov = mat.Overrides.empty()
+                                              ? nullptr : cache.GetOverride(cmd.EntityID);
+                        cmd.MaterialSet = ov ? ov : gpu.Base.Set;
+                    } else {
+                        cmd.PipelineRef = errorPipeline;
+                    }
                 }
-                cmd.MaterialSet = mat.GetDescriptorSet();
             }
 
             // Build sort key: pipeline pointer (upper 32) | VB pointer (lower 32)

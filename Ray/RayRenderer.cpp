@@ -18,7 +18,7 @@
 #include "Echelon/Scene/Scene.hpp"
 #include "Echelon/ECS/Components.hpp"
 #include "Echelon/Renderer/RendererLoader.hpp"   // ExecutableDir()
-#include "Echelon/Renderer/RendererConstants.hpp"
+#include "ABI/RayConstants.hpp"                   // renderer-owned shader ABI (CPU mirrors)
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtc/matrix_inverse.hpp"             // inverseTranspose
@@ -154,6 +154,7 @@ namespace Echelon {
         m_PassGraph.SetOffscreenTarget(false);
 
         m_SystemSets.clear();
+        m_MaterialCache.Clear();
         m_FullscreenSets.clear();
         m_FullscreenPipelines.clear();
         m_ComputePipelines.clear();
@@ -848,6 +849,7 @@ namespace Echelon {
         // asset has already updated its description in place), rebuild GL programs,
         // and drop stale system sets.
         m_SystemSets.clear();
+        m_MaterialCache.Clear();                                     // material pipelines/sets rebuilt lazily
         m_FullscreenPipelines.clear();                               // rebuilt lazily
         m_ComputePipelines.clear();
         m_OverridePipelines.clear();                                 // rebuilt lazily against new passes
@@ -1076,7 +1078,8 @@ namespace Echelon {
 
         EnsureUpToDate();
 
-        m_RenderGraph.Update(scene, GetDefaultPipeline(), GetErrorPipeline());
+        m_RenderGraph.Update(scene, this, m_MaterialCache,
+                             GetDefaultPipeline(), GetErrorPipeline(), GetScenePass());
 
         // Render this frame's shadow maps (dir/spot/point) into renderer-owned targets
         // before the main graph, and upload g_Shadows. Runs outside the pass graph since

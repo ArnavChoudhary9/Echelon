@@ -19,7 +19,6 @@
 #include "Renderer/Camera.hpp"
 #include "Asset/Mesh/Mesh.hpp"
 #include "Asset/Material/Material.hpp"
-#include "Asset/Material/MaterialInstance.hpp"
 
 #include "glm/glm.hpp"
 #include "yaml-cpp/yaml.h"
@@ -105,9 +104,6 @@ namespace YAML {
 }
 
 namespace Echelon {
-
-    // Forward declarations
-    class Pipeline;
 
     // ==================================================================
     // IDComponent
@@ -407,16 +403,18 @@ namespace Echelon {
     // MaterialComponent
     // ==================================================================
     /**
-     * @brief References a Material asset (+ optional sparse instance overrides).
+     * @brief References a Material asset (+ optional sparse per-entity overrides).
      *
-     * The material reference (handle + readable source) is serialized; the
-     * resolved GPU objects (base material, instance, pipeline) are transient and
-     * rebuilt at render time — mirroring MeshComponent. Overrides are sparse
-     * per-entity parameter values layered over the base material (they form a
-     * runtime MaterialInstance). An empty MaterialHandle falls back to the
-     * renderer's default pipeline.
+     * The material reference (handle + readable source) is serialized; the resolved
+     * base material asset is transient and re-resolved at render time — mirroring
+     * MeshComponent. Overrides are sparse per-entity parameter values layered over
+     * the base material. An empty MaterialHandle falls back to the renderer's
+     * default pipeline.
      *
-     * A Version counter lets the RenderGraph detect changes cheaply (O(1)).
+     * This component holds only DATA. GPU objects (pipeline + descriptor sets,
+     * including a per-entity override set) live in the renderer's material cache;
+     * the engine never builds them. A Version counter lets the renderer detect
+     * changes cheaply (O(1)).
      */
     class MaterialComponent {
     public:
@@ -424,13 +422,14 @@ namespace Echelon {
         UUID        MaterialHandle = UUID::Null();  ///< Authoritative material asset reference.
         std::string MaterialSource;                 ///< Readable hint: relative path.
 
-        // ---- Sparse per-entity overrides (serialized) → runtime MaterialInstance ----
+        // ---- Sparse per-entity overrides (serialized); the renderer builds an override set from these ----
         std::unordered_map<std::string, MaterialParam> Overrides;
 
-        // ---- Transient (resolved by the RenderGraph) ----
-        Ref<Material>         RuntimeMaterial;               ///< Resolved base material.
-        Ref<MaterialInstance> RuntimeInstance;               ///< Built when Overrides is non-empty.
-        Ref<Pipeline>         PipelineRef = nullptr;         ///< Resolved pipeline (base material's).
+        // ---- Transient (resolved by the renderer at render time) ----
+        // GPU objects (pipeline + descriptor sets) live in the renderer's material
+        // cache, keyed by material/entity identity — NOT here. The component carries
+        // only data: the resolved base material asset + cheap change-tracking.
+        Ref<Material>         RuntimeMaterial;               ///< Resolved base material (data).
         uint64_t              ResolveEpoch = UINT64_MAX;      ///< AssetManager epoch at last resolve.
         uint64_t              Version      = 0;               ///< Cheap dirty check.
 
@@ -441,17 +440,6 @@ namespace Echelon {
 
         /** Bump the version — call after changing the material or overrides. */
         void Invalidate() { ++Version; }
-
-        /** Sort key: pointer identity of the resolved pipeline, for batching. */
-        uintptr_t GetPipelineSortKey() const {
-            return reinterpret_cast<uintptr_t>(PipelineRef.get());
-        }
-
-        /** The descriptor set to bind for this entity (instance overrides → base → none). */
-        Ref<DescriptorSet> GetDescriptorSet() const {
-            if (RuntimeInstance) return RuntimeInstance->GetDescriptorSet();
-            return RuntimeMaterial ? RuntimeMaterial->GetDescriptorSet() : nullptr;
-        }
 
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {

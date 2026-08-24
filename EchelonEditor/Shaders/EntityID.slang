@@ -7,7 +7,7 @@
 // (ObjectId.x + 1) and treats a read-back 0 as "nothing here". Depth-tested by the
 // pass so the front-most surface wins; sampled back only via glReadPixels.
 
-import Echelon;   // g_Frame + g_Object + VertexInput + ObjectToClip
+import Ray;   // g_Frame + g_Object + VertexInput + ObjectToClip
 
 struct VSOut
 {

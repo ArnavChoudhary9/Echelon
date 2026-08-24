@@ -1,12 +1,12 @@
 #pragma once
 
 /**
- * @file RendererConstants.hpp
- * @brief CPU-side mirrors of the engine's fixed shader ABI (Echelon.slang).
+ * @file RayConstants.hpp
+ * @brief CPU-side mirrors of the Ray renderer's shader ABI (Ray.slang).
  *
- * Any renderer plugin that uploads g_Frame / g_Object should include this
- * header instead of redeclaring these structs locally. Sizes must stay in
- * sync with the std140 layout Slang reflects (Frame = 224 B, Object = 144 B).
+ * This ABI is renderer-owned: the Ray renderer defines these constant buffers
+ * and resolves them by name from reflection. Sizes must stay in sync with the
+ * std140 layout Slang reflects (Frame = 224 B, Object = 144 B).
  */
 
 #include "Echelon/GraphicsAPI/ShaderReflection.hpp"

@@ -17,8 +17,9 @@
  */
 
 #include "Echelon/Renderer/RendererAPI.hpp"
-#include "Echelon/Renderer/RenderGraph.hpp"
-#include "Echelon/Renderer/RenderPassGraph.hpp"
+#include "Render/RenderGraph.hpp"
+#include "Render/RenderPassGraph.hpp"
+#include "Material/RayMaterialCache.hpp"
 #include "Echelon/GraphicsAPI/GraphicsAPI.hpp"
 #include "Echelon/GraphicsAPI/Device.hpp"
 #include "Echelon/GraphicsAPI/Texture.hpp"
@@ -88,9 +89,6 @@ namespace Echelon {
 
         // ---- Resource access ----
         Ref<Device>   GetDevice()          const override { return m_Device; }
-        Ref<Pipeline> GetDefaultPipeline() const override { return m_FlatPipeline; }
-        Ref<Pipeline> GetErrorPipeline()   const override { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
-        Ref<RenderPass> GetScenePass()     const override { return m_PassGraph.GetRenderPass("forward"); }
         const char*   GetDefaultShaderName() const override { return "PBR.slang"; }
 
         // ---- Queries ----
@@ -98,6 +96,13 @@ namespace Echelon {
         RenderStats  GetStats() const override;
 
     private:
+        // ---- Internal scene-pipeline accessors (renderer-private; NOT in the contract).
+        // How a scene becomes GPU pipelines + which pass it draws into is Ray's own
+        // business — the engine core never sees these. ----
+        Ref<Pipeline>   GetDefaultPipeline() const { return m_FlatPipeline; }
+        Ref<Pipeline>   GetErrorPipeline()   const { return m_ErrorPipeline ? m_ErrorPipeline : m_FlatPipeline; }
+        Ref<RenderPass> GetScenePass()       const { return m_PassGraph.GetRenderPass("forward"); }
+
         void CreateDefaultResources();
 
         /** @brief Load a shader asset and ensure its GPU program exists (renderer is not yet active during Init). */
@@ -238,6 +243,11 @@ namespace Echelon {
 
         // ---- Render graph (caches draw commands across frames) ----
         RenderGraph   m_RenderGraph;
+
+        // ---- Material→GPU cache (pipelines + descriptor sets per material/entity).
+        // The renderer owns all material GPU state; core Material is pure data.
+        // Cleared on asset-epoch change (hot-reload / renderer swap) in EnsureUpToDate. ----
+        RayMaterialCache m_MaterialCache;
 
         // ---- Multipass pass graph (named passes, attachments, execution order) ----
         RenderPassGraph m_PassGraph;

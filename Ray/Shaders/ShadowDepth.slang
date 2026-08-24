@@ -3,7 +3,7 @@
 // framebuffer has no color attachment). The renderer sets g_ShadowPass.LightViewProj
 // per shadow view. Sampled later by PBR.slang via PcfShadow2D().
 
-import Echelon;   // g_Object + g_ShadowPass + VertexInput
+import Ray;   // g_Object + g_ShadowPass + VertexInput
 
 struct VSOut
 {

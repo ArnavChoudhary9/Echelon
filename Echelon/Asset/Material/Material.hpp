@@ -2,20 +2,23 @@
 
 /**
  * @file Material.hpp
- * @brief Material asset — binds a shader + reflection-driven parameters + textures.
+ * @brief Material asset — a shader reference + reflection-driven parameter values
+ *        + texture references. PURE DATA.
  *
- * A Material references a ShaderAsset and stores parameter values (packed into the
- * shader's reflected material UBO) and texture references. It may reference a
+ * A Material references a ShaderAsset and stores parameter values (by name) and
+ * texture references (reflected sampler name → texture path). It may reference a
  * parent material (a "saved instance"): unset parameters fall through to the
  * parent, then to the shader default. The set of editable parameters is derived
  * entirely from shader reflection — add a parameter by editing the .slang, no C++
  * change required. Saved to disk as a `.ehmaterial` YAML file.
+ *
+ * The Material carries NO GPU objects: turning this data into a GPU pipeline +
+ * descriptor set is the renderer's job (it alone knows the shader ABI and the
+ * scene pass). See Ray/Material/RayMaterialCache.
  */
 
 #include "Asset/Asset.hpp"
-#include "Asset/Shader/ShaderAsset.hpp"
 #include "Asset/Material/MaterialParam.hpp"
-#include "Asset/Material/MaterialResources.hpp"
 
 #include "Core/UUID.hpp"
 
@@ -38,19 +41,12 @@ namespace Echelon {
         ~Material() override = default;
 
         AssetType GetType() const override { return AssetType::Material; }
-        bool IsValid() const override { return m_Pipeline != nullptr; }
 
-        void UploadGPU(RendererAPI* renderer) override;
-        void ReleaseGPU() override;
+        /** @brief Valid as data once it names a shader (GPU validity is the renderer's concern). */
+        bool IsValid() const override { return !ShaderHandle.IsNull() || !ShaderSource.empty(); }
+
+        /** @brief Absorb freshly re-imported data (hot-reload); the renderer rebuilds GPU state on the epoch bump. */
         void ReloadFrom(const Ref<Asset>& fresh) override;
-
-        /** @brief Re-pack current parameter values into the GPU UBO (after edits). */
-        void Repack();
-
-        // ---- Accessors ----
-        const Ref<Pipeline>&      GetPipeline() const      { return m_Pipeline; }
-        const Ref<DescriptorSet>& GetDescriptorSet() const { return m_Resources.Set; }
-        const Ref<ShaderAsset>&   GetShaderAsset() const   { return m_Shader; }
 
         /** @brief Resolve a parameter value: own value → parent → nullptr (unset). */
         const MaterialParam* Resolve(const std::string& name) const;
@@ -58,12 +54,7 @@ namespace Echelon {
         void SetParam(const std::string& name, const MaterialParam& value) { Params[name] = value; }
 
     private:
-        Ref<ShaderAsset>     m_Shader;
-        Ref<Material>        m_Parent;
-        Ref<Pipeline>        m_Pipeline;
-        Ref<Texture>         m_DefaultTexture;
-        Ref<Sampler>         m_DefaultSampler;
-        MaterialGpuResources m_Resources;
+        mutable Ref<Material> m_Parent;   ///< lazily resolved parent (saved-instance chain); pure data.
     };
 
 } // namespace Echelon

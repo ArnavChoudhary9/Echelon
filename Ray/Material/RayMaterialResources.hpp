@@ -1,21 +1,23 @@
 #pragma once
 
 /**
- * @file MaterialResources.hpp
- * @brief Shared helpers to build & pack a material's reflection-driven GPU
- *        resources (parameter UBO + descriptor set). Used by both Material and
- *        MaterialInstance so the packing logic lives in one place.
+ * @file RayMaterialResources.hpp
+ * @brief Renderer-owned helpers to build & pack a material's reflection-driven
+ *        GPU resources (parameter UBO + descriptor set). Used by the Ray material
+ *        cache to realise both a material's base set and its per-entity override set.
  *
  * The "material block" is the first reflected uniform buffer that is NOT part of
- * the fixed shader constant system (g_Frame / g_Object). Its members are the
- * material's editable parameters; reflected samplers are material textures.
+ * Ray's shader ABI (g_Frame / g_Object / …). Its members are the material's
+ * editable parameters; reflected samplers are material textures. Which resources
+ * are "system" is decided by Ray's ABI (RayConstants.hpp) — so the split lives
+ * with the renderer, not the engine core.
  */
 
-#include "GraphicsAPI/Device.hpp"
-#include "GraphicsAPI/ShaderReflection.hpp"
-#include "Renderer/RendererAPI.hpp"
-#include "Renderer/RendererConstants.hpp"   // IsSystemUniformName / IsSystemSamplerName (single source of truth)
-#include "Asset/Material/MaterialParam.hpp"
+#include "Echelon/GraphicsAPI/Device.hpp"
+#include "Echelon/GraphicsAPI/ShaderReflection.hpp"
+#include "Echelon/Renderer/RendererAPI.hpp"
+#include "ABI/RayConstants.hpp"   // IsSystemUniformName / IsSystemSamplerName (Ray ABI policy)
+#include "Echelon/Asset/Material/MaterialParam.hpp"
 
 #include <functional>
 #include <string>
@@ -58,7 +60,7 @@ namespace Echelon {
      *
      * Binds the param UBO at its reflected binding and a (texture, sampler) pair at
      * every reflected sampler binding.  Pass nullptr/nullptr for both fallback arguments
-     * if the caller has no textures to bind (e.g. MaterialInstance override-only path).
+     * if the caller has no textures to bind (e.g. the per-entity override-only path).
      *
      * @param fallbackTexture  1×1 white texture used when a sampler resolves to nothing.
      * @param fallbackSampler  Default sampler (LINEAR/REPEAT).  Required on Vulkan;
@@ -66,7 +68,7 @@ namespace Echelon {
      * @param textureResolver  Optional: reflected sampler name → real texture. Called
      *                         per reflected sampler; on null/empty result the binding
      *                         falls back to @p fallbackTexture. Pass {} to bind only
-     *                         fallbacks (e.g. the MaterialInstance override-only path).
+     *                         fallbacks (e.g. the per-entity override-only path).
      */
     inline MaterialGpuResources BuildMaterialResources(RendererAPI* renderer,
                                                        const ShaderReflection& refl,

@@ -1,7 +1,7 @@
 // Flat.slang — the default shader. Uses only the system constant buffers
 // (g_Frame / g_Object); no material parameters. Shades from the world normal.
 
-import Echelon;
+import Ray;
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput vin)

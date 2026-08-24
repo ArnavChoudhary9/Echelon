@@ -34,17 +34,15 @@
 
 namespace Echelon {
 
-    // Forward declarations — renderer works with engine graphics abstractions
+    // Forward declarations — the contract only traffics in the Scene, GPU resource
+    // handles the engine may create (Device/Buffer/Texture/Shader), and the neutral
+    // pass-graph description used for injectable auxiliary passes. How a scene turns
+    // into pipelines/passes is the renderer's own business.
     class Scene;
-    class SceneGraph;
     class Device;
     class Buffer;
     class Texture;
     class Shader;
-    class Pipeline;
-    class RenderPass;
-    class Framebuffer;
-    class CommandBuffer;
     struct RenderPipelineDesc;
 
     // ================================================================
@@ -281,31 +279,10 @@ namespace Echelon {
          */
         virtual Ref<Device> GetDevice() const = 0;
 
-        /**
-         * @brief Get the renderer's default pipeline for meshes with no material.
-         * @return Ref<Pipeline> or nullptr.
-         */
-        virtual Ref<Pipeline> GetDefaultPipeline() const = 0;
-
-        /**
-         * @brief Get the renderer's error pipeline — used when a material is
-         *        configured but fails to resolve (e.g. missing shader asset).
-         *        Typically renders a bright solid colour so the problem is obvious.
-         * @return Ref<Pipeline> or nullptr (may fall back to GetDefaultPipeline).
-         */
-        virtual Ref<Pipeline> GetErrorPipeline() const = 0;
-
-        /**
-         * @brief The render pass that scene geometry is drawn into (the "forward"
-         *        pass of the active pass graph).
-         *
-         * Pipelines that draw scene meshes (materials, default, error) should be
-         * created compatible with this pass. Default is null for renderers without
-         * a pass graph; OpenGL ignores pass compatibility, so null is harmless there.
-         *
-         * @return Ref<RenderPass> or nullptr.
-         */
-        virtual Ref<RenderPass> GetScenePass() const { return nullptr; }
+        // NOTE: how a scene turns into GPU pipelines — the default/error/material
+        // pipelines and the scene ("forward") pass — is entirely the renderer's
+        // internal business and is deliberately NOT part of this contract. The
+        // renderer builds and caches those itself (see Ray's material cache).
 
         /**
          * @brief Filename of the renderer's default shader (e.g. "Flat.slang").

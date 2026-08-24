@@ -11,7 +11,7 @@
 //   u_MetalRough  g = roughness, b = metallic   (glTF convention); r = occlusion (ORM)
 //   u_Emissive    rgb emissive
 
-import Echelon;   // g_Frame/g_Object/g_Lights + g_Shadows/g_Ibl + PCF helpers + VertexInput/Output
+import Ray;   // g_Frame/g_Object/g_Lights + g_Shadows/g_Ibl + PCF helpers + VertexInput/Output
 
 static const float PI = 3.14159265359;
 

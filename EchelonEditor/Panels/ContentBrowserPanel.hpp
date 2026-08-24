@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 namespace fs = std::filesystem;
@@ -93,8 +94,11 @@ private:
 
         using Entry = std::pair<fs::directory_entry, bool>;
         std::vector<Entry> entries;
+        std::unordered_set<std::string> seen;
         try {
             for (const auto& e : fs::directory_iterator(m_CurrentPath)) {
+                const std::string ps = e.path().string();
+                if (!seen.insert(ps).second) continue;
                 entries.push_back({ e, e.is_directory() });
             }
         } catch (...) {}
@@ -154,7 +158,7 @@ private:
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
 
-        // Overlay the file-type label at the bottom of the file icon.
+        // Overlay the file-type label at the bottom of the file icon (uses last-item rect).
         if (!isDir) {
             const char* type = ExtLabel(ext);
             const ImVec2 tsz = ImGui::CalcTextSize(type);
@@ -166,6 +170,26 @@ private:
                 ImVec2(pos.x + tsz.x + 4.0f, pos.y + tsz.y + 2.0f),
                 IM_COL32(0, 0, 0, 172), 3.0f);
             ImGui::GetWindowDrawList()->AddText(pos, IM_COL32(255, 255, 255, 230), type);
+        }
+
+        // Drag source: scenes, meshes, materials, and images can be dragged onto targets.
+        if (!isDir) {
+            const bool isImg = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga");
+            const bool draggable = (ext == ".ehscene" || ext == ".obj" || ext == ".fbx"
+                                 || ext == ".gltf"    || ext == ".ehmaterial" || isImg);
+            if (draggable && ImGui::BeginDragDropSource()) {
+                const std::string rel = RelativePath(entry.path());
+                const void* data      = rel.c_str();
+                const int   sz        = static_cast<int>(rel.size() + 1);
+
+                if      (ext == ".ehscene")    ImGui::SetDragDropPayload("DND_SCENE",    data, sz);
+                else if (ext == ".ehmaterial") ImGui::SetDragDropPayload("DND_MATERIAL", data, sz);
+                else if (isImg)                ImGui::SetDragDropPayload("DND_IMAGE",    data, sz);
+                else                           ImGui::SetDragDropPayload("DND_MESH",     data, sz);
+
+                ImGui::TextUnformatted(name.c_str());
+                ImGui::EndDragDropSource();
+            }
         }
 
         // Double-click a folder to enter it.
@@ -211,6 +235,22 @@ private:
     }
 
     // ---- Helpers -------------------------------------------------------
+    // Returns the project-relative path that the asset resolver expects.
+    // Strips a leading "Assets/" component when that sub-directory exists,
+    // because the resolver uses Assets/ as its base (e.g. "Meshs/Monkey.obj").
+    std::string RelativePath(const fs::path& absPath) const {
+        try {
+            const fs::path assetsDir = m_RootPath / "Assets";
+            if (fs::is_directory(assetsDir)) {
+                const fs::path rel = fs::relative(absPath, assetsDir);
+                // rel starts with ".." when absPath is NOT under assetsDir
+                if (rel.begin() != rel.end() && rel.begin()->string() != "..")
+                    return rel.string();
+            }
+            return fs::relative(absPath, m_RootPath).string();
+        } catch (...) { return absPath.string(); }
+    }
+
     static const char* ExtLabel(const std::string& ext) {
         if (ext == ".ehmaterial") return "MAT";
         if (ext == ".ehpipeline") return "PIPE";

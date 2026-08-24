@@ -34,6 +34,7 @@
 #include <entt/entt.hpp>
 #include <vector>
 #include <string>
+#include <filesystem>
 
 using namespace Echelon;
 
@@ -99,6 +100,12 @@ public:
         m_SelSub = OnMessage<EntitySelectedEvent>([this](const EntitySelectedEvent& e) {
             m_Ctx->Selection = e.Entity;
         });
+        m_SceneLoadSub = OnMessage<SceneLoadRequestedEvent>([this](const SceneLoadRequestedEvent& e) {
+            OnLoadScene(e.Path);
+        });
+        m_MeshSpawnSub = OnMessage<MeshSpawnRequestedEvent>([this](const MeshSpawnRequestedEvent& e) {
+            OnSpawnMesh(e.MeshSource);
+        });
 
         // ---- Spawn the panels as overlays (they share m_Ctx, talk via the bus) ----
         m_Toolbar        = CreateRef<ToolbarPanel>(m_Ctx);
@@ -122,6 +129,8 @@ public:
         // Closing without saving must discard changes, so nothing is written here.
         m_CmdSub.Reset();
         m_SelSub.Reset();
+        m_SceneLoadSub.Reset();
+        m_MeshSpawnSub.Reset();
         m_Ctx = nullptr;
     }
 
@@ -303,6 +312,53 @@ private:
             case EditorAction::Restart: SetPlaying(false); SetPlaying(true); break;
             case EditorAction::Step:    if (m_Ctx->IsPaused) m_Ctx->StepOneFrame = true; break;
         }
+    }
+
+    void OnLoadScene(const std::string& path) {
+        if (m_Ctx->IsPlaying) return;
+        auto project = Application::Get().GetProject();
+        if (!project) return;
+        auto scene = project->OpenScene(path);
+        if (!scene) {
+            ECHELON_LOG_WARN("[Editor] Failed to load dropped scene: {}", path);
+            return;
+        }
+        m_Ctx->EditScene   = scene;
+        m_Ctx->ActiveScene = scene;
+        m_Ctx->Selection   = entt::null;
+        m_LastViewportW = m_LastViewportH = 0;
+    }
+
+    void OnSpawnMesh(const std::string& meshSource) {
+        if (!m_Ctx->EditScene || m_Ctx->IsPlaying) return;
+
+        // Derive a display name: last path component without extension.
+        std::string stem = meshSource;
+        const auto slash = stem.find_last_of("/\\");
+        if (slash != std::string::npos) stem = stem.substr(slash + 1);
+        const auto dot = stem.rfind('.');
+        if (dot != std::string::npos) stem = stem.substr(0, dot);
+        if (stem.empty()) stem = "Mesh";
+
+        Entity e = m_Ctx->EditScene->AddEntity(stem);
+        e.AddComponent<MeshComponent>().MeshSource = meshSource;
+        auto& mat = e.AddComponent<MaterialComponent>();
+
+        // Auto-detect a .ehmaterial with the same base name adjacent to the mesh file.
+        if (auto project = Application::Get().GetProject()) {
+            const std::string dir   = [&] {
+                const auto s = meshSource.find_last_of("/\\");
+                return s != std::string::npos ? meshSource.substr(0, s + 1) : std::string();
+            }();
+            const std::string guess = dir + stem + ".ehmaterial";
+            const fs::path absGuess = project->GetRootDirectory() / "Assets" / guess;
+            if (std::filesystem::exists(absGuess))
+                mat.MaterialSource = guess;
+        }
+
+        const entt::entity handle = static_cast<entt::entity>(e);
+        m_Ctx->Selection = handle;
+        PublishEvent(EntitySelectedEvent{ handle });
     }
 
     // Play runs on a deep copy so play-time changes are discarded on Stop.
@@ -647,6 +703,8 @@ private:
     // Bus subscriptions (RAII).
     ScopedSubscription m_CmdSub;
     ScopedSubscription m_SelSub;
+    ScopedSubscription m_SceneLoadSub;
+    ScopedSubscription m_MeshSpawnSub;
 
     // Input accumulation (OnEvent → OnUpdate).
     float m_LastMouseX  = 0.0f;

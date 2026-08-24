@@ -1,9 +1,11 @@
 // ============================================================================
-// Echelon.slang — the shader constant system (fixed ABI shared by all shaders).
+// Ray.slang — the Ray renderer's shader ABI (imported as `import Ray;`).
 //
-// What ALWAYS goes in/out and what is ALWAYS available is defined here. Anything
-// else (material parameters, extra textures, extra interpolants) is up to the
-// individual shader and is discovered by the renderer via reflection.
+// This ABI is RENDERER-OWNED (not engine-core): it defines what ALWAYS goes
+// in/out of a shader and what is ALWAYS available. Anything else (material
+// parameters, extra textures, extra interpolants) is up to the individual
+// shader and is discovered by the renderer via reflection. A different renderer
+// ships its own ABI module.
 //
 // System constant buffers are resolved by the renderer *by name* (g_Frame,
 // g_Object), never by hardcoded binding — Slang assigns bindings, the renderer

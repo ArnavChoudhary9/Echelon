@@ -4,7 +4,7 @@
 // value is world distance from the light normalized by the far plane. Sampled later by
 // PBR.slang via PcfShadowCube().
 
-import Echelon;   // g_Object + g_ShadowPass + VertexInput
+import Ray;   // g_Object + g_ShadowPass + VertexInput
 
 struct VSOut
 {

@@ -1,7 +1,8 @@
 # To-Do
 
 - [ ] Multiple renderers on compilation. (Currently only one renderer can be compiled at a time.)
-- [x] mesh data must not be shader dependent.
 - [ ] Custom Assets for building and compression.
 - [ ] Logger for Renderer.
-- [ ] anti aliasing
+- [ ] fixing material
+- [ ] .obj and .mtl shit
+- [ ] bew build system

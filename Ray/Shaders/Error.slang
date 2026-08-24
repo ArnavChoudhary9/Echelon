@@ -2,7 +2,7 @@
 // missing/failed material or shader is immediately obvious in the viewport.
 // Renderer-owned; the engine uses the compiled pipeline via GetErrorPipeline().
 
-import Echelon;
+import Ray;
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput vin)

@@ -23,10 +23,9 @@
 // ---- Texture ----
 #include "Asset/Texture/TextureAsset.hpp"
 
-// ---- Material ----
+// ---- Material (pure data; the renderer turns it into GPU objects) ----
 #include "Asset/Material/MaterialParam.hpp"
 #include "Asset/Material/Material.hpp"
-#include "Asset/Material/MaterialInstance.hpp"
 
 // ---- Render Pipeline (multipass pass graph) ----
 #include "Asset/RenderPipeline/RenderPipelineDesc.hpp"

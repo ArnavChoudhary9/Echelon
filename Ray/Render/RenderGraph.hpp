@@ -38,7 +38,10 @@ namespace Echelon {
     // Forward declarations
     class Scene;
     class Pipeline;
+    class RenderPass;
     class DescriptorSet;
+    class RendererAPI;
+    class RayMaterialCache;   // renderer-owned material→GPU cache (Ray/Material/)
 
     // ================================================================
     // A single draw command (one entity, fully resolved)
@@ -115,12 +118,18 @@ namespace Echelon {
          * integer comparison — O(1).
          *
          * @param scene           The active scene.
+         * @param renderer        The owning renderer (material cache builds GPU objects against it).
+         * @param cache           Renderer-owned material→GPU cache (pipelines + descriptor sets).
          * @param defaultPipeline Pipeline used for entities that have no MaterialComponent.
          * @param errorPipeline   Pipeline used when a material is configured but fails to resolve.
+         * @param scenePass       The scene ("forward") pass material pipelines must be compatible with.
          */
         void Update(const Ref<Scene>& scene,
+                    RendererAPI* renderer,
+                    RayMaterialCache& cache,
                     const Ref<Pipeline>& defaultPipeline,
-                    const Ref<Pipeline>& errorPipeline);
+                    const Ref<Pipeline>& errorPipeline,
+                    const Ref<RenderPass>& scenePass);
 
         /**
          * @brief Force a full rebuild on the next Update().
@@ -143,8 +152,11 @@ namespace Echelon {
 
     private:
         void Rebuild(const Ref<Scene>& scene,
+                     RendererAPI* renderer,
+                     RayMaterialCache& cache,
                      const Ref<Pipeline>& defaultPipeline,
-                     const Ref<Pipeline>& errorPipeline);
+                     const Ref<Pipeline>& errorPipeline,
+                     const Ref<RenderPass>& scenePass);
         void SortAndBatch();
         uint64_t ComputeSceneVersion(const Ref<Scene>& scene) const;
 

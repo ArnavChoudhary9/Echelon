@@ -53,6 +53,16 @@ struct PlayStateChangedEvent {
     bool Paused;
 };
 
+// Emitted by ViewportPanel when a scene asset is dropped onto the viewport.
+struct SceneLoadRequestedEvent {
+    std::string Path;   // project-relative path (e.g. "Scenes/MyScene.ehscene")
+};
+
+// Emitted by ViewportPanel when a mesh asset is dropped onto the viewport.
+struct MeshSpawnRequestedEvent {
+    std::string MeshSource;  // built-in name ("Sphere") or project-relative path
+};
+
 // ------------------------------------------------------------------
 // Toolbar icon sets (dark = white icons, light = black icons)
 // ------------------------------------------------------------------
