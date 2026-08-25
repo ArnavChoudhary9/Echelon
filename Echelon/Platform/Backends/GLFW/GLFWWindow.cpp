@@ -1,5 +1,6 @@
 #include "GLFWWindow.hpp"
 #include "Echelon/Core/Base.hpp"
+#include "Echelon/Core/Log.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -16,10 +17,7 @@ namespace Echelon {
     // ----------------------------------------------------------------
     static void GLFWErrorCallback(int error, const char* description)
     {
-        (void)error;
-        (void)description;
-        // TODO: route through Echelon logger once available globally
-        // ECHELON_LOG_ERROR("GLFW Error ({0}): {1}", error, description);
+        ECHELON_LOG_ERROR("GLFW Error ({}): {}", error, description ? description : "unknown");
     }
 
     // ================================================================
@@ -35,9 +33,12 @@ namespace Echelon {
 
         if (s_GLFWWindowCount == 0)
         {
-            int success = glfwInit();
-            (void)success; // TODO: ECHELON_ASSERT(success, "Failed to initialise GLFW!");
             glfwSetErrorCallback(GLFWErrorCallback);
+            if (!glfwInit())
+            {
+                ECHELON_LOG_ERROR("[Window] Failed to initialise GLFW!");
+                return;   // leaves m_Window == nullptr; count stays 0
+            }
         }
 
         glfwWindowHint(GLFW_RESIZABLE, desc.Resizable ? GLFW_TRUE : GLFW_FALSE);
@@ -50,7 +51,16 @@ namespace Echelon {
             nullptr
         );
 
-        ++s_GLFWWindowCount;
+        if (!m_Window)
+        {
+            ECHELON_LOG_ERROR("[Window] Failed to create GLFW window '{}' ({}x{}).",
+                              desc.Title, desc.Width, desc.Height);
+            if (s_GLFWWindowCount == 0)
+                glfwTerminate();
+            return;
+        }
+
+        ++s_GLFWWindowCount;   // only count successfully created windows
 
         // Make the OpenGL context current (needed for SwapBuffers / VSync)
         glfwMakeContextCurrent(m_Window);
@@ -63,6 +73,8 @@ namespace Echelon {
 
     GLFWWindow::~GLFWWindow()
     {
+        if (!m_Window) return;   // creation failed; nothing was counted or allocated
+
         glfwDestroyWindow(m_Window);
         --s_GLFWWindowCount;
 

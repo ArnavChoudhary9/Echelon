@@ -119,64 +119,74 @@ namespace Echelon {
         // Clear existing entities
         m_Scene->Clear();
 
-        for (const auto& entityNode : entities) {
-            // Recover UUID
-            UUID entityUUID;
-            if (entityNode["IDComponent"])
-                entityUUID = entityNode["IDComponent"]["ID"].as<UUID>();
+        // Component Deserialize() helpers call node.as<T>(), which throws
+        // YAML::TypedBadConversion on malformed / hand-edited data. Catch it so a
+        // corrupt file can't leave the scene half-populated or crash the caller.
+        try {
+            for (const auto& entityNode : entities) {
+                // Recover UUID
+                UUID entityUUID;
+                if (entityNode["IDComponent"])
+                    entityUUID = entityNode["IDComponent"]["ID"].as<UUID>();
 
-            // Recover tag / name
-            std::string name = "Entity";
-            if (entityNode["TagComponent"])
-                name = entityNode["TagComponent"]["Tag"].as<std::string>("Entity");
+                // Recover tag / name
+                std::string name = "Entity";
+                if (entityNode["TagComponent"])
+                    name = entityNode["TagComponent"]["Tag"].as<std::string>("Entity");
 
-            // Create entity with specific UUID
-            Entity entity = m_Scene->AddEntityWithUUID(entityUUID, name);
+                // Create entity with specific UUID
+                Entity entity = m_Scene->AddEntityWithUUID(entityUUID, name);
 
-            // TransformComponent
-            if (entityNode["TransformComponent"]) {
-                auto& tc = entity.GetComponent<TransformComponent>();
-                auto deserialized = TransformComponent::Deserialize(entityNode["TransformComponent"]);
-                tc.Position = deserialized.Position;
-                tc.Rotation = deserialized.Rotation;
-                tc.Scale    = deserialized.Scale;
-            }
+                // TransformComponent
+                if (entityNode["TransformComponent"]) {
+                    auto& tc = entity.GetComponent<TransformComponent>();
+                    auto deserialized = TransformComponent::Deserialize(entityNode["TransformComponent"]);
+                    tc.Position = deserialized.Position;
+                    tc.Rotation = deserialized.Rotation;
+                    tc.Scale    = deserialized.Scale;
+                }
 
-            // RelationshipComponent
-            if (entityNode["RelationshipComponent"]) {
-                auto rc = RelationshipComponent::Deserialize(entityNode["RelationshipComponent"]);
-                if (entity.HasComponent<RelationshipComponent>()) {
-                    entity.GetComponent<RelationshipComponent>() = rc;
-                } else {
-                    entity.AddComponent<RelationshipComponent>(rc.Parent);
-                    entity.GetComponent<RelationshipComponent>().Children = rc.Children;
+                // RelationshipComponent
+                if (entityNode["RelationshipComponent"]) {
+                    auto rc = RelationshipComponent::Deserialize(entityNode["RelationshipComponent"]);
+                    if (entity.HasComponent<RelationshipComponent>()) {
+                        entity.GetComponent<RelationshipComponent>() = rc;
+                    } else {
+                        entity.AddComponent<RelationshipComponent>(rc.Parent);
+                        entity.GetComponent<RelationshipComponent>().Children = rc.Children;
+                    }
+                }
+
+                // MeshComponent (reconstructs metadata only — GPU buffers
+                // must be re-created by the application / renderer)
+                if (entityNode["MeshComponent"]) {
+                    auto mc = MeshComponent::Deserialize(entityNode["MeshComponent"]);
+                    entity.AddComponent<MeshComponent>(mc);
+                }
+
+                // CameraComponent
+                if (entityNode["CameraComponent"]) {
+                    auto cc = CameraComponent::Deserialize(entityNode["CameraComponent"]);
+                    entity.AddComponent<CameraComponent>(cc);
+                }
+
+                // MaterialComponent (pipeline ref is transient — reassigned by renderer)
+                if (entityNode["MaterialComponent"]) {
+                    auto mc = MaterialComponent::Deserialize(entityNode["MaterialComponent"]);
+                    entity.AddComponent<MaterialComponent>(mc);
+                }
+
+                // LightComponent
+                if (entityNode["LightComponent"]) {
+                    auto lc = LightComponent::Deserialize(entityNode["LightComponent"]);
+                    entity.AddComponent<LightComponent>(lc);
                 }
             }
-
-            // MeshComponent (reconstructs metadata only — GPU buffers
-            // must be re-created by the application / renderer)
-            if (entityNode["MeshComponent"]) {
-                auto mc = MeshComponent::Deserialize(entityNode["MeshComponent"]);
-                entity.AddComponent<MeshComponent>(mc);
-            }
-
-            // CameraComponent
-            if (entityNode["CameraComponent"]) {
-                auto cc = CameraComponent::Deserialize(entityNode["CameraComponent"]);
-                entity.AddComponent<CameraComponent>(cc);
-            }
-
-            // MaterialComponent (pipeline ref is transient — reassigned by renderer)
-            if (entityNode["MaterialComponent"]) {
-                auto mc = MaterialComponent::Deserialize(entityNode["MaterialComponent"]);
-                entity.AddComponent<MaterialComponent>(mc);
-            }
-
-            // LightComponent
-            if (entityNode["LightComponent"]) {
-                auto lc = LightComponent::Deserialize(entityNode["LightComponent"]);
-                entity.AddComponent<LightComponent>(lc);
-            }
+        }
+        catch (const YAML::Exception& e) {
+            ECHELON_LOG_ERROR("[SceneSerializer] Malformed entity in '{}': {}", filepath.string(), e.what());
+            m_Scene->Clear();
+            return false;
         }
 
         // Rebuild the scene graph after loading

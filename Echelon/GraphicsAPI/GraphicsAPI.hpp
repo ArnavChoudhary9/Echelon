@@ -99,8 +99,9 @@ namespace Echelon {
         /**
          * @brief Get the default graphics backend for this build.
          *
-         * Determined by the ECHELON_GRAPHICS_BACKEND compile-time define.
-         * Falls back to OpenGL if not specified.
+         * Determined by the ECHELON_DEFAULT_GRAPHICS_BACKEND_* compile-time define
+         * (set by premake from the first --graphics-backends entry). It is a hard
+         * compile error if none is set — there is no implicit fallback.
          */
         static GraphicsBackend GetDefaultBackend();
     };

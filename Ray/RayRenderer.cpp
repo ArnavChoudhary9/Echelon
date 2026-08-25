@@ -105,6 +105,10 @@ namespace Echelon {
         }
 
         m_CommandBuffer = m_Device->CreateCommandBuffer();
+        if (!m_CommandBuffer) {
+            ECHELON_LOG_ERROR("Ray: Failed to create command buffer");
+            return false;
+        }
 
         SwapchainDesc swapDesc;
         swapDesc.Width        = width;
@@ -113,6 +117,10 @@ namespace Echelon {
         swapDesc.VSync        = true;
 
         m_Swapchain = m_Device->CreateSwapchain(swapDesc);
+        if (!m_Swapchain) {
+            ECHELON_LOG_ERROR("Ray: Failed to create swapchain");
+            return false;
+        }
 
         // Per-pass-type default handlers (persist across pass-graph recompiles):
         //  - Graphics passes record the scene draw list.
@@ -1250,21 +1258,21 @@ namespace Echelon {
         if (!pipe) return;
         cmd.BindPipeline(pipe);
 
-        // Bind each resolved input attachment at the shader's reflected sampler binding.
-        if (Ref<Shader> shader = pipe->GetShader(); shader && !ctx.InputTextures.empty()) {
-            const ShaderReflection& refl = shader->GetReflection();
-            if (!refl.Samplers.empty()) {
-                Ref<DescriptorSet>& set = m_FullscreenSets[pass.Name];
-                if (!set) set = m_Device->AllocateDescriptorSet(m_FullscreenLayout);
+        // Bind each resolved input at its AUTHORED sampler binding (parallel to
+        // ctx.InputTextures). Do NOT pair positionally with reflected sampler order —
+        // Slang may reorder samplers by binding, which would misroute textures. This
+        // mirrors the compute path.
+        if (!pass.Inputs.empty() && !ctx.InputTextures.empty()) {
+            Ref<DescriptorSet>& set = m_FullscreenSets[pass.Name];
+            if (!set) set = m_Device->AllocateDescriptorSet(m_FullscreenLayout);
 
-                const size_t n = std::min(ctx.InputTextures.size(), refl.Samplers.size());
-                for (size_t i = 0; i < n; ++i) {
-                    if (ctx.InputTextures[i])
-                        set->SetTexture(refl.Samplers[i].Binding, ctx.InputTextures[i], m_LinearSampler);
-                }
-                set->Update();
-                cmd.BindDescriptorSet(set, 0);
+            const size_t n = std::min(pass.Inputs.size(), ctx.InputTextures.size());
+            for (size_t i = 0; i < n; ++i) {
+                if (ctx.InputTextures[i])
+                    set->SetTexture(pass.Inputs[i].Binding, ctx.InputTextures[i], m_LinearSampler);
             }
+            set->Update();
+            cmd.BindDescriptorSet(set, 0);
         }
 
         cmd.BindVertexBuffer(m_FullscreenVBO);   // POSITION-attributed fullscreen triangle

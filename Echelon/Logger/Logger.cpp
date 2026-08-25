@@ -14,11 +14,15 @@ Logger::Logger(const std::string& name) : m_Name(name) {
 
         // Register the logger with spdlog
         spdlog::register_logger(m_Logger);
+        m_Owns = true;   // only the registering instance may drop it
     }
 }
 
 Logger::~Logger() {
-    spdlog::drop(m_Name);
+    // Drop from the registry only if we registered it — otherwise a second Logger
+    // sharing this name would yank the entry out from under the first one.
+    if (m_Owns)
+        spdlog::drop(m_Name);
 }
 
 void Logger::Trace (const std::string& message) const { m_Logger->trace (message); }

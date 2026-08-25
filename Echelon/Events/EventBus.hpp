@@ -68,16 +68,29 @@ namespace Echelon {
         /**
          * @brief Deliver @p msg to every subscriber of type @p T, in subscription order.
          *
-         * The handler list is snapshotted before dispatch so a handler that
-         * (un)subscribes while being invoked cannot invalidate the walk.
+         * The handler list is snapshotted before dispatch so (un)subscribing while a
+         * handler runs cannot invalidate the walk. Each entry is also re-checked
+         * against the live list right before it is invoked, so a handler that
+         * Unsubscribes another subscriber mid-dispatch (e.g. a ScopedSubscription
+         * dtor freeing the object it captured) cannot call into a freed callback.
          */
         template<typename T>
         void Publish(const T& msg) {
-            const auto it = m_Handlers.find(std::type_index(typeid(T)));
+            const std::type_index key(typeid(T));
+            const auto it = m_Handlers.find(key);
             if (it == m_Handlers.end() || it->second.empty()) return;
             const std::vector<Entry> snapshot = it->second;
-            for (const auto& e : snapshot)
-                e.Fn(&msg);
+            for (const auto& e : snapshot) {
+                // Re-find the bucket every iteration: a handler may have added a new
+                // type (rehash invalidates iterators) or removed this very entry.
+                const auto live = m_Handlers.find(key);
+                if (live == m_Handlers.end()) break;
+                const bool stillSubscribed = std::any_of(
+                    live->second.begin(), live->second.end(),
+                    [&](const Entry& x) { return x.Id == e.Id; });
+                if (stillSubscribed)
+                    e.Fn(&msg);
+            }
         }
 
     private:

@@ -210,10 +210,7 @@ namespace Echelon {
 
         ~TagComponent() = default;
 
-        TagComponent& Copy() {
-            auto copy = new TagComponent(*this);
-            return *copy;
-        }
+        TagComponent Copy() const { return *this; }
 
         // ---- Serialization ----
         void Serialize(YAML::Emitter& out) const {

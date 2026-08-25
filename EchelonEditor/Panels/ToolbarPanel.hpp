@@ -19,6 +19,8 @@ public:
         : Panel("Toolbar"), m_Ctx(std::move(ctx)) {}
 
     void OnImGUIRender() override {
+        if (!IsOpen()) return;   // respect the View-menu toggle (custom render skips the base check)
+
         const ImGuiViewport* vp  = ImGui::GetMainViewport();
         const ImGuiStyle&    sty = ImGui::GetStyle();
 

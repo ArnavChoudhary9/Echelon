@@ -30,7 +30,7 @@ namespace Echelon {
     };
 
     FileWatcher::FileWatcher()  : m_Impl(std::make_unique<Impl>()) {}
-    FileWatcher::~FileWatcher() = default;
+    FileWatcher::~FileWatcher() { Stop(); }  // join the thread before m_Impl is destroyed
 
     void FileWatcher::Start() {
         m_Impl->m_InotifyFd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);

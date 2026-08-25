@@ -92,19 +92,19 @@ namespace Echelon {
         RegisterImporter(CreateRef<RenderPipelineImporter>());
 
         // Procedural built-in shapes ("internal shape repository").
-        RegisterPrimitive("Cube",   []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
-        RegisterPrimitive("Plane",  []() -> Ref<Asset> { return MeshPrimitives::CreatePlane(); });
-        RegisterPrimitive("Sphere", []() -> Ref<Asset> { return MeshPrimitives::CreateSphere(); });
+        RegisterPrimitive("Cube",   AssetType::Mesh, []() -> Ref<Asset> { return MeshPrimitives::CreateCube(); });
+        RegisterPrimitive("Plane",  AssetType::Mesh, []() -> Ref<Asset> { return MeshPrimitives::CreatePlane(); });
+        RegisterPrimitive("Sphere", AssetType::Mesh, []() -> Ref<Asset> { return MeshPrimitives::CreateSphere(); });
 
         // Built-in PBR material template (the standard BRDF). Referenced by name
         // ("PBR.ehmaterialtype"); GetHandle() matches the primitive name before any file,
         // so both built-in and project materials resolve to this single template. Loaded
         // lazily from the shipped file (source of truth) with a code fallback.
-        RegisterPrimitive("PBR.ehmaterialtype", []() -> Ref<Asset> { return LoadOrBuildPbrTemplate(); });
+        RegisterPrimitive("PBR.ehmaterialtype", AssetType::MaterialTemplate, []() -> Ref<Asset> { return LoadOrBuildPbrTemplate(); });
 
         // Built-in default material — a PBR instance used as the fallback look. PBR requires
         // its params set (unset members zero-fill → black/occluded), so seed sane ones.
-        RegisterPrimitive("DefaultMaterial", []() -> Ref<Asset> {
+        RegisterPrimitive("DefaultMaterial", AssetType::Material, []() -> Ref<Asset> {
             auto mat = CreateRef<Material>();
             mat->TemplateSource = "PBR.ehmaterialtype";
             mat->Params["BaseColor"] = MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
@@ -189,14 +189,14 @@ namespace Echelon {
             m_ImportersByExt[ToLower(ext)] = importer;
     }
 
-    UUID AssetManager::RegisterPrimitive(const std::string& name, std::function<Ref<Asset>()> generator) {
+    UUID AssetManager::RegisterPrimitive(const std::string& name, AssetType type, std::function<Ref<Asset>()> generator) {
         UUID handle = UUID::FromName("builtin:" + name);
         m_PrimitiveHandles[name]      = handle;
         m_PrimitiveGenerators[handle] = std::move(generator);
 
         AssetMetadata meta;
         meta.Handle          = handle;
-        meta.Type            = AssetType::Mesh; // primitives are meshes for now
+        meta.Type            = type;
         meta.IsMemoryOnly    = true;
         meta.WatchForChanges = false;
         m_Registry.SetMetadata(meta);

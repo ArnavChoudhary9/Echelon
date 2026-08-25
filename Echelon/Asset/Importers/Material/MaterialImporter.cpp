@@ -16,8 +16,12 @@ namespace Echelon {
         out << YAML::Key << "Type"  << YAML::Value << MaterialParamTypeToString(p.Type);
         out << YAML::Key << "Value" << YAML::Value << YAML::Flow << YAML::BeginSeq;
         for (uint32_t i = 0; i < floats; ++i) {
-            if (p.Type == MaterialParamType::Int) out << *reinterpret_cast<const int*>(&p.Data[i]);
-            else                                  out << p.Data[i];
+            if (p.Type == MaterialParamType::Int) {
+                int v; std::memcpy(&v, &p.Data[i], sizeof(int));  // avoid strict-aliasing UB
+                out << v;
+            } else {
+                out << p.Data[i];
+            }
         }
         out << YAML::EndSeq;
         out << YAML::EndMap;

@@ -49,8 +49,10 @@ namespace Echelon {
 
     // Predefined sinks
 
-    // Default Console sink with color support
-    static const Ref<Sink> ConsoleSink = CreateRef<Sink>(
+    // Default Console sink with color support.
+    // `inline` (not `static`) so every TU shares ONE instance — otherwise each TU
+    // gets its own sink with its own mutex, and concurrent writes can interleave.
+    inline const Ref<Sink> ConsoleSink = CreateRef<Sink>(
         CreateRef<spdlog::sinks::stdout_color_sink_mt>()
     );
 

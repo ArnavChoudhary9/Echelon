@@ -77,8 +77,9 @@ namespace Echelon {
         /** @brief Register a loader back-end (keyed by the extensions it reports). */
         void RegisterImporter(const Ref<AssetImporter>& importer);
 
-        /** @brief Register a procedural built-in asset generator; returns its stable handle. */
-        UUID RegisterPrimitive(const std::string& name, std::function<Ref<Asset>()> generator);
+        /** @brief Register a procedural built-in asset generator; returns its stable handle.
+         *  @param type The asset kind produced, so it is discoverable via GetAssetsByType. */
+        UUID RegisterPrimitive(const std::string& name, AssetType type, std::function<Ref<Asset>()> generator);
 
         // ---- Resolution / loading ----
 

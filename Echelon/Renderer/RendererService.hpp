@@ -99,7 +99,9 @@ namespace Echelon {
          * @brief Make a loaded renderer active: shut down the current active
          *        one, initialise the target against the window, then notify
          *        listeners. Must already be LoadRenderer()'d.
-         * @return true on success; on failure leaves no active renderer.
+         * @return true iff the requested renderer became active. On failure it may
+         *         fall back to a previously-working renderer (which stays active) or
+         *         leave none active — query GetActive()/HasActive() to tell which.
          */
         bool SetActive(const std::string& name);
 

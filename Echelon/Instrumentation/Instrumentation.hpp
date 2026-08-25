@@ -78,7 +78,7 @@ namespace Echelon {
             json << "\"name\":\"" << name << "\",";
             json << "\"ph\":\"X\",";
             json << "\"pid\":0,";
-            json << "\"tid\":" << result.ThreadID << ",";
+            json << "\"tid\":" << std::hash<std::thread::id>{}(result.ThreadID) << ",";
             json << "\"ts\":" << result.Start.count();
             json << "}";
 

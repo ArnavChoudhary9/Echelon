@@ -43,7 +43,9 @@ namespace Echelon {
     class Input
     {
     public:
-        virtual ~Input() = default;
+        // Reset the singleton when the installed backend is destroyed, so the static
+        // query API can't dereference a dangling pointer after teardown.
+        virtual ~Input() { if (s_Instance == this) s_Instance = nullptr; }
 
         // ---- Static query API (delegates to the installed backend) ----
 
@@ -54,7 +56,7 @@ namespace Echelon {
          */
         static bool IsKeyPressed(KeyCode keycode)
         {
-            return s_Instance->IsKeyPressedImpl(keycode);
+            return s_Instance && s_Instance->IsKeyPressedImpl(keycode);
         }
 
         /**
@@ -64,7 +66,7 @@ namespace Echelon {
          */
         static bool IsMouseButtonPressed(MouseCode button)
         {
-            return s_Instance->IsMouseButtonPressedImpl(button);
+            return s_Instance && s_Instance->IsMouseButtonPressedImpl(button);
         }
 
         /**
@@ -72,7 +74,7 @@ namespace Echelon {
          */
         static float GetMouseX()
         {
-            return s_Instance->GetMouseXImpl();
+            return s_Instance ? s_Instance->GetMouseXImpl() : 0.0f;
         }
 
         /**
@@ -80,7 +82,7 @@ namespace Echelon {
          */
         static float GetMouseY()
         {
-            return s_Instance->GetMouseYImpl();
+            return s_Instance ? s_Instance->GetMouseYImpl() : 0.0f;
         }
 
         /**
@@ -88,7 +90,7 @@ namespace Echelon {
          */
         static std::pair<float, float> GetMousePosition()
         {
-            return s_Instance->GetMousePositionImpl();
+            return s_Instance ? s_Instance->GetMousePositionImpl() : std::pair<float, float>{ 0.0f, 0.0f };
         }
 
         // ---- Factory ----

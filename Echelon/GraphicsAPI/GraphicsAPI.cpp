@@ -59,6 +59,7 @@ namespace Echelon {
             case GraphicsBackend::Headless:
             case GraphicsBackend::None:
             default:
+                ECHELON_LOG_ERROR("[GraphicsAPI] No graphics backend selected (None/Headless/unknown).");
                 break;
         }
 

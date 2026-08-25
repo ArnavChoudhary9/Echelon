@@ -54,5 +54,6 @@ namespace Echelon {
     private:
         std::string m_Name;
         Ref<spdlog::logger> m_Logger;
+        bool m_Owns = false;   ///< true only if THIS instance registered m_Name with spdlog
     };
 }

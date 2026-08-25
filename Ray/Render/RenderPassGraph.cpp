@@ -330,7 +330,9 @@ namespace Echelon {
         m_Width  = width;
         m_Height = height;
         if (!m_Order.empty()) {
-            CreateFramebuffers();
+            if (!CreateFramebuffers())
+                ECHELON_LOG_ERROR("[RenderPassGraph] Framebuffer recreation failed on resize to {}x{}.",
+                                  width, height);
             CreateComputeResources();
             BuildOffscreenTarget();   // editor viewport target follows the graph size
         }

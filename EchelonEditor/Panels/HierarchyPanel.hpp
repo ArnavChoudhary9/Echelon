@@ -33,14 +33,8 @@ protected:
 
         m_Pending = {};   // reset deferred ops each frame
 
-        // ---- Header: create entity -------------------------------------
-        if (ImGui::Button("+ Add Entity"))
-            m_Pending.createEmptyRoot = true;
-        ImGui::SameLine();
-        ImGui::TextDisabled("drag a row onto another to re-parent");
-        ImGui::Separator();
-
         // ---- Tree (scrollable) -----------------------------------------
+        // Entity creation / reparenting is available via right-click and drag-drop.
         ImGui::BeginChild("##tree", ImVec2(0, 0), false);
 
         auto view = registry->view<RelationshipComponent>();

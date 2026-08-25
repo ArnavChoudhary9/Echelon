@@ -38,20 +38,21 @@ namespace Echelon {
         return entity;
     }
 
+    // Both overloads route through DestroyEntity so the entity is unlinked from its
+    // parent/child relationships — a bare registry->destroy() left dangling UUIDs in
+    // the scene graph. Children are promoted to root (destroyChildren = false).
     void Scene::RemoveEntity(const std::string& name) {
         auto view = m_EntityRegistry->view<TagComponent>();
         for (auto&& [entity, tag] : view.each()) {
             if (tag.Tag == name) {
-                m_EntityRegistry->destroy(entity);
-                m_SceneGraph.MarkDirty();
+                DestroyEntity(Entity(entity, CreateWeakRef(m_SelfRef)), /*destroyChildren=*/false);
                 return;
             }
         }
     }
 
     void Scene::RemoveEntity(Entity entity) {
-        m_EntityRegistry->destroy(entity);
-        m_SceneGraph.MarkDirty();
+        DestroyEntity(entity, /*destroyChildren=*/false);
     }
 
     void Scene::DestroyEntity(Entity entity, bool destroyChildren) {
@@ -175,6 +176,8 @@ namespace Echelon {
     }
 
     void Scene::DetachFromParent(Entity entity) {
+        if (!entity)
+            return;
         auto& rc = entity.GetComponent<RelationshipComponent>();
         if (!rc.Parent.has_value())
             return;

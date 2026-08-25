@@ -123,8 +123,12 @@ private:
             ImGui::TextUnformatted("/");
             ImGui::SameLine(0.0f, 2.0f);
             const fs::path target = accumulated;
+            // Key the button on the full accumulated path so two identically-named
+            // ancestors (e.g. A/B/A) don't collide on the same ImGui ID.
+            ImGui::PushID(accumulated.string().c_str());
             if (ImGui::SmallButton(seg.c_str()))
                 NavigateTo(target);
+            ImGui::PopID();
         }
     }
 
@@ -140,6 +144,8 @@ private:
         std::unordered_set<std::string> seen;
         try {
             for (const auto& e : fs::directory_iterator(m_CurrentPath)) {
+                // Hide asset sidecar metadata — it is an implementation detail.
+                if (e.path().extension() == ".meta") continue;
                 const std::string ps = e.path().string();
                 if (!seen.insert(ps).second) continue;
                 entries.push_back({ e, e.is_directory() });
@@ -239,15 +245,11 @@ private:
         if (isDir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             NavigateTo(entry.path());
 
-        // ---- Filename label (centered, large font) ---------------------
-        if (m_Ctx->FontLarge) ImGui::PushFont(m_Ctx->FontLarge);
-
+        // ---- Filename label (centered, default font to avoid overload) --
         std::string display = name.size() > 15 ? name.substr(0, 14) + ".." : name;
         const ImVec2 textSz = ImGui::CalcTextSize(display.c_str());
         ImGui::SetCursorPosX(startX + std::max(0.0f, (colW - textSz.x) * 0.5f));
         ImGui::TextUnformatted(display.c_str());
-
-        if (m_Ctx->FontLarge) ImGui::PopFont();
 
         if (ImGui::IsItemHovered() && name.size() > 15)
             ImGui::SetTooltip("%s", name.c_str());

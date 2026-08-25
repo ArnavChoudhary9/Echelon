@@ -54,9 +54,6 @@ public:
             io.Fonts->AddFontFromFileTTF("EditorResources/Fonts/opensans/OpenSans-Bold.ttf", 28.0f);
             io.FontDefault = io.Fonts->AddFontFromFileTTF(
                 "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 28.0f);
-            // Larger variant for the content browser labels.
-            m_Ctx->FontLarge = io.Fonts->AddFontFromFileTTF(
-                "EditorResources/Fonts/opensans/OpenSans-Regular.ttf", 32.0f);
         }
 
         // ---- Load or create scene ----
@@ -189,13 +186,21 @@ public:
 
         dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& e) {
             if (e.GetRepeatCount() != 0) return false;
+            const bool ctrl = Input::IsKeyPressed(Key::LeftControl) ||
+                              Input::IsKeyPressed(Key::RightControl);
+            // Ctrl+S saves the active scene (matches the File-menu accelerator).
+            if (ctrl && e.GetKeyCode() == Key::S) {
+                if (auto project = Application::Get().GetProject()) project->SaveScene();
+                return false;
+            }
             // P toggles play/edit — viewport must be focused so it does not fire while
             // typing in another panel. Routed through the bus like the toolbar.
             if (m_Ctx->ViewportFocused && e.GetKeyCode() == Key::P)
                 PublishEvent(EditorCommandEvent{ m_Ctx->IsPlaying ? EditorAction::Stop
                                                                   : EditorAction::Play });
-            // ` (grave) toggles free-camera mode.
-            if (e.GetKeyCode() == Key::GraveAccent)
+            // ` (grave) toggles free-camera mode — gated on viewport focus (like P) so
+            // it does not fire while typing a `` ` `` into a text field.
+            if (m_Ctx->ViewportFocused && e.GetKeyCode() == Key::GraveAccent)
                 m_Ctx->FreeCam = !m_Ctx->FreeCam;
             return false;
         });

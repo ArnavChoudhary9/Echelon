@@ -111,10 +111,6 @@ struct EditorContext {
     Ref<TextureAsset> DirIcon;
     Ref<TextureAsset> FileIcon;
 
-    // Extra font for content-browser labels (larger than the 24px default).
-    // Loaded in EditorLayer::OnAttach before the atlas is built.
-    ImFont* FontLarge = nullptr;
-
     // The camera is driven whenever Alt is held (momentary) or free-cam is on.
     bool CameraActive() const {
         return FreeCam || Input::IsKeyPressed(Key::LeftAlt);

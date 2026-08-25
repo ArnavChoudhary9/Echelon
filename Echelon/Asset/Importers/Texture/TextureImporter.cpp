@@ -23,7 +23,11 @@ namespace Echelon {
     // common filename conventions and default to sRGB (the common colour case).
     // A future .meta override can make this explicit per-asset.
     static bool LooksLikeLinearData(const std::string& path) {
-        std::string lower = path;
+        // Key off the file NAME only, not the whole path — otherwise a directory
+        // component like "platform"/"uniforms"/"normalmaps" trips a substring hint
+        // and mis-tags an unrelated colour texture as linear.
+        const size_t slash = path.find_last_of("/\\");
+        std::string lower = (slash == std::string::npos) ? path : path.substr(slash + 1);
         std::transform(lower.begin(), lower.end(), lower.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
@@ -31,7 +35,7 @@ namespace Echelon {
             "normal", "_norm", "_nrm", "_n.", "roughness", "_rough", "_r.",
             "metallic", "metalness", "_metal", "_m.", "specular", "_spec",
             "_ao", "occlusion", "height", "_disp", "displacement", "bump",
-            "mask", "_data", "_linear", "orm",
+            "mask", "_data", "_linear", "_orm",
         };
         for (const char* hint : kLinearHints)
             if (lower.find(hint) != std::string::npos)
@@ -58,9 +62,10 @@ namespace Echelon {
             // HDR is always linear (scene-referred radiance); decode to float RGBA.
             float* data = stbi_loadf(path.c_str(), &width, &height, &channels, 4);
             if (!data) {
-                ECHELON_LOG_ERROR("[TextureImporter] Failed to load HDR '{}': {}",
-                                  path, stbi_failure_reason());
-                return ImportResult(std::string("stb_image (hdr): ") + stbi_failure_reason());
+                const char* reason = stbi_failure_reason();
+                if (!reason) reason = "unknown";
+                ECHELON_LOG_ERROR("[TextureImporter] Failed to load HDR '{}': {}", path, reason);
+                return ImportResult(std::string("stb_image (hdr): ") + reason);
             }
             const size_t byteCount = static_cast<size_t>(width) * height * 4 * sizeof(float);
             const auto* bytes = reinterpret_cast<const uint8_t*>(data);
@@ -80,9 +85,10 @@ namespace Echelon {
         // and avoids row-alignment / format-mismatch pitfalls for odd channel counts.
         stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
         if (!data) {
-            ECHELON_LOG_ERROR("[TextureImporter] Failed to load '{}': {}",
-                              path, stbi_failure_reason());
-            return ImportResult(std::string("stb_image: ") + stbi_failure_reason());
+            const char* reason = stbi_failure_reason();
+            if (!reason) reason = "unknown";
+            ECHELON_LOG_ERROR("[TextureImporter] Failed to load '{}': {}", path, reason);
+            return ImportResult(std::string("stb_image: ") + reason);
         }
 
         const bool linear = LooksLikeLinearData(path);

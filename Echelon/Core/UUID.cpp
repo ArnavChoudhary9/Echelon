@@ -22,8 +22,11 @@ namespace Echelon {
 
 	UUID::UUID(const std::string& uuidString)
 	{
+		// On parse failure fall back to the nil UUID (detectable via IsNull()) rather
+		// than a fresh random id — a malformed id in a file must not silently become a
+		// brand-new one, which would corrupt parent/child/asset references.
 		auto parsed = uuids::uuid::from_string(uuidString);
-		m_UUID = parsed.has_value() ? *parsed : s_UUIDGenerator();
+		m_UUID = parsed.has_value() ? *parsed : uuids::uuid{};
 	}
 
 	UUID UUID::Null()
