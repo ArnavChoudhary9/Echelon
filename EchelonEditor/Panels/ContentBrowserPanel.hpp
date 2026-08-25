@@ -280,7 +280,7 @@ private:
     // ---- Helpers -------------------------------------------------------
     // Returns the project-relative path that the asset resolver expects.
     // Strips a leading "Assets/" component when that sub-directory exists,
-    // because the resolver uses Assets/ as its base (e.g. "Meshs/Monkey.obj").
+    // because the resolver uses Assets/ as its base (e.g. "Meshes/Monkey.obj").
     std::string RelativePath(const fs::path& absPath) const {
         try {
             const fs::path assetsDir = m_RootPath / "Assets";

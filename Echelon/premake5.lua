@@ -118,15 +118,8 @@ project "Echelon"
             "%{wks.location}/bin/" .. outputdir .. "/ImGUI/libImGUI.a",
             "-Wl,--no-whole-archive",
         }
-        -- Ship the prebuilt Slang runtime libs next to libEchelon.so (its $ORIGIN
-        -- rpath resolves them here). The editor copies them beside the exe too, but
-        -- the exe may load the canonical libEchelon from this dir, so it needs them.
-        postbuildcommands {
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-compiler.so.0.2026.14.1 %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glslang-2026.14.1.so %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glsl-module-2026.14.1.so %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-rt.so.0.2026.14.1 %{cfg.buildtarget.directory}",
-        }
+        -- (The Slang runtime libs are shipped beside libEchelon on every platform by
+        --  the SlangRuntimeCopy block below.)
 
     -- macOS frameworks: Cocoa/IOKit/CoreVideo for GLFW, OpenGL for glad
     filter "system:macosx"
@@ -135,6 +128,13 @@ project "Echelon"
         -- ImGui via -force_load to re-export only its symbols from libEchelon.dylib.
         linkoptions { "-Wl,-force_load,%{wks.location}/bin/" .. outputdir .. "/ImGUI/libImGUI.a" }
         linkoptions { "-Wl,-rpath,@loader_path" }
+
+    -- Ship the Slang runtime shared libs (fetched by scripts/setup.py) next to
+    -- libEchelon on every platform: the engine has a transitive NEEDED on libslang and
+    -- dlopens glslang/glsl-module, and the exe may load the canonical libEchelon from
+    -- this dir (its $ORIGIN / @loader_path rpath resolves the runtime libs here).
+    filter {}
+    SlangRuntimeCopy("%{cfg.buildtarget.directory}")
 
     -- Shared libs need position-independent code
     filter "configurations:Debug"

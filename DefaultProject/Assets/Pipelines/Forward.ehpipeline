@@ -2,7 +2,8 @@ RenderPipeline:
   resources:
     - { name: hdr,   format: RGBA16_FLOAT, size: swapchain }
     - { name: depth, format: D32_FLOAT,    size: swapchain }
-    - { name: bloom, format: RGBA16_FLOAT, size: fixed, width: 640, height: 360 }
+    - { name: bloom,       format: RGBA16_FLOAT, size: fixed, width: 640, height: 360 }
+    - { name: bloomGraded, format: RGBA16_FLOAT, size: fixed, width: 640, height: 360 }
   passes:
     # 1) Scene → offscreen HDR color (+ depth), 4x MSAA, auto-resolved to `hdr`.
     #    MSAA is the anti-aliasing (no separate FXAA pass). PBR writes LINEAR HDR.
@@ -13,21 +14,37 @@ RenderPipeline:
         - { resource: hdr, load: clear, store: store, clear: [0.02, 0.03, 0.05, 1.0] }
       depth: { resource: depth, load: clear, store: dontcare }
 
-    # 2) Bloom — PROJECT COMPUTE pass: bright-pass + blur of `hdr` into `bloom`.
+    # 2) Bloom — RENDERER-INTERNAL compute pass: bright-pass + blur of `hdr` into `bloom`.
+    #    `Bloom.slang` is a bare name → resolved to the Ray renderer's shipped shader at
+    #    <exe>/Shaders/Bloom.slang, not a project asset.
     - name: bloom
       type: compute
-      shader: Shaders/Bloom.slang
+      shader: Bloom.slang
       inputs:
         - { resource: hdr,   binding: 0 }
         - { resource: bloom, binding: 1, storage: true }
       groups: [80, 45, 1]   # 640/8 x 360/8 (fixed bloom resolution)
+
+    # 2b) BloomTint — PROJECT example COMPUTE pass. Demonstrates a custom project shader:
+    #     reads the renderer's `bloom` and writes a warm-graded copy into `bloomGraded`,
+    #     which the tonemap pass composites. A single writer per resource is required, so
+    #     it writes a NEW resource rather than editing `bloom` in place.
+    #     `Shaders/BloomTint.slang` is a project-relative path → loaded from THIS project's
+    #     Assets dir, so edits hot-reload without touching the engine/renderer.
+    - name: bloomtint
+      type: compute
+      shader: Shaders/BloomTint.slang
+      inputs:
+        - { resource: bloom,       binding: 0 }
+        - { resource: bloomGraded, binding: 1, storage: true }
+      groups: [80, 45, 1]   # matches the fixed 640x360 bloom resolution
 
     # 3) Tonemap — composite bloom + filmic ACES + linear→sRGB, straight to the backbuffer.
     - name: tonemap
       type: fullscreen
       shader: Tonemap.slang
       inputs:
-        - { resource: hdr,   binding: 0 }
-        - { resource: bloom, binding: 1 }
+        - { resource: hdr,         binding: 0 }
+        - { resource: bloomGraded, binding: 1 }
       color:
         - { resource: "$backbuffer", load: dontcare, store: store }

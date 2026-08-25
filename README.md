@@ -21,10 +21,27 @@ The engine core (`Echelon`) owns the OpenGL backend + glad; renderer plugins lin
 `Ray` is the default. To build/ship a different renderer as the default (and omit Ray from the package), put it in a top-level folder named after it (with its own `premake5.lua` whose `targetname` equals the folder name, exporting `CreateRenderer`/`DestroyRenderer`), then generate with:
 
 ```bash
+python3 scripts/setup.py            # fetch Slang once (build scripts do this for you)
 Vendor/premake5 gmake2 --renderer=MyRenderer
+make config=release
 ```
 
 The chosen name is baked in as the runtime default (`ECHELON_DEFAULT_RENDERER`) and only that library is compiled and copied. If the renderer library is missing or incompatible at runtime, the engine logs an error and falls back to the last working renderer.
+
+## Getting the source
+
+The vendored libraries are git submodules, and the Slang shader SDK is fetched per-platform
+at build time (it is **not** committed):
+
+```bash
+git clone <repo-url> Echelon
+cd Echelon
+git submodule update --init --recursive
+```
+
+The build scripts run `scripts/setup.py` automatically to download the correct Slang SDK for
+your OS/architecture the first time you build (needs network access; re-runs are no-ops). You
+can also fetch it by hand at any time: `python3 scripts/setup.py` (`--force` to refetch).
 
 ## Prerequisites
 
@@ -34,6 +51,7 @@ The chosen name is baked in as the runtime default (`ECHELON_DEFAULT_RENDERER`) 
 | --------------------------------- | ------------------------------ |
 | Visual Studio 2022 or MinGW-w64   | C++20 compiler                 |
 | GNU Make (via MinGW or Chocolatey)| `choco install make`           |
+| Python 3                          | Fetches the Slang SDK          |
 
 `Vendor/premake5.exe` is included; no separate install needed.
 
@@ -43,6 +61,7 @@ The chosen name is baked in as the runtime default (`ECHELON_DEFAULT_RENDERER`) 
 | --------------------- | ------------------------------------------------------------------------------------ |
 | GCC 12+ or Clang 14+  | `sudo apt install build-essential`                                                   |
 | GNU Make              | Included with `build-essential`                                                      |
+| Python 3              | `sudo apt install python3` (fetches the Slang SDK)                                   |
 | X11 dev headers       | `sudo apt install libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev` |
 | OpenGL dev headers    | `sudo apt install libgl-dev`                                                         |
 
@@ -54,31 +73,26 @@ The chosen name is baked in as the runtime default (`ECHELON_DEFAULT_RENDERER`) 
 | --------------------------- | --------------------------- |
 | Xcode Command Line Tools    | `xcode-select --install`    |
 | premake5                    | `brew install premake`      |
+| Python 3                    | Preinstalled / `brew install python` |
 
 No vendored macOS premake binary is included; the system-installed one is used.
 
 ## Building
 
-All build scripts must be run from the **project root**.
+The build scripts can be run from anywhere — they `cd` to the project root themselves, fetch
+the Slang SDK (`scripts/setup.py`), generate project files, and build.
 
 ### Build — Windows
 
 ```bat
-build\build.bat [OPTIONS]
+scripts\build.bat [OPTIONS]
 ```
 
-### Build — Linux
+### Build — Linux / macOS
 
 ```bash
-chmod +x build/build.sh
-./build/build.sh [OPTIONS]
-```
-
-### Build — macOS
-
-```bash
-chmod +x build/build_mac.sh
-./build/build_mac.sh [OPTIONS]
+chmod +x scripts/build.sh
+scripts/build.sh [OPTIONS]
 ```
 
 ### Build options
@@ -95,13 +109,13 @@ Passing no flags builds both Debug and Release.
 
 ```bash
 # Build both configurations
-./build/build.sh
+scripts/build.sh
 
 # Debug only
-./build/build.sh --debug
+scripts/build.sh --debug
 
 # Release only
-./build/build.sh --release
+scripts/build.sh --release
 ```
 
 ## Output layout
@@ -112,21 +126,30 @@ After a successful build the binaries land under `bin/`:
 bin/<config>-<os>-x86_64/
 ├── EchelonEditor/
 │   ├── EchelonEditor          (or .exe)
-│   ├── libEchelon.so          (or .dll / .dylib) ← copied by post-build
-│   └── libRay.so              (or Ray.dll / libRay.dylib) ← copied by post-build
+│   ├── libEchelon.so          (or .dll / .dylib)       ← copied by post-build
+│   ├── libRay.so              (or Ray.dll / libRay.dylib) ← copied by post-build
+│   ├── libslang-*.so          (Slang runtime)          ← copied by post-build
+│   ├── Shaders/               renderer + editor .slang + PBR.ehmaterialtype
+│   ├── DefaultProject/        starter project (seeded only if absent)
+│   ├── EditorResources/       icons + fonts
+│   └── imgui.ini              default layout (seeded only if absent)
 ├── Echelon/
 │   └── libEchelon.so
 └── Ray/                       (or <renderer> when built with --renderer=<name>)
     └── libRay.so
 ```
 
-The post-build copy ensures the editor can find both shared libraries without any environment variable changes.
+The post-build copy ensures the editor finds the shared libraries, shaders, and Slang runtime
+without any environment variable changes. The copy logic lives in reusable helpers in
+`Dependencies.lua` (`SlangRuntimeCopy`, `CopyShaders`, `CopyGlob`), so it is not duplicated
+per platform and picks up new files by glob.
 
 ## Project structure
 
 ```text
 Echelon/
-├── build/              Build scripts (Windows, Linux, macOS)
+├── scripts/            build.sh / build.bat (cross-platform) + setup.py (fetches Slang)
+├── docs/               PRD, best practices, TODO
 ├── Echelon/            Engine core (shared library)
 │   ├── Application/
 │   ├── GraphicsAPI/    Abstract GPU abstraction layer
@@ -135,14 +158,10 @@ Echelon/
 │   └── Scene/
 ├── EchelonEditor/      Editor host application
 ├── Ray/                Ray PBR renderer plugin (shared library)
-├── Vendor/             Third-party libraries
-│   ├── entt/
-│   ├── glad/
-│   ├── GLFW/
-│   ├── glm/
-│   ├── spdlog/
-│   └── yaml/
-├── Dependencies.lua    Shared include-path definitions
+├── Vendor/             Third-party libraries (submodules)
+│   ├── entt/  glad/  GLFW/  glm/  spdlog/  yaml/  …
+│   └── slang/          Slang SDK — fetched by scripts/setup.py (not committed)
+├── Dependencies.lua    Shared dep definitions + postbuild copy helpers
 └── premake5.lua        Workspace definition
 ```
 

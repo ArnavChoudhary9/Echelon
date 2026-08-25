@@ -1,1 +1,6 @@
-!lib/*
+# Slang is a prebuilt SDK fetched per-platform by scripts/setup.py — not committed.
+# Everything the setup script lays out is ignored; only this file + LICENSE are tracked.
+/include/
+/lib/
+/runtime/
+/bin/

@@ -1,6 +1,8 @@
-// Bloom.slang — PROJECT compute pass. Bright-pass + Gaussian blur of the HDR scene
-// into a (fixed-size) bloom texture, later composited by the tonemap pass. This is the
-// project's example COMPUTE shader (the render-pass example is PostColor/Tonemap/FXAA).
+// Bloom.slang — RENDERER-INTERNAL (Ray) compute shader. Bright-pass + Gaussian blur of
+// the HDR scene into a (fixed-size) bloom texture, later composited by the tonemap pass.
+// It ships beside the executable in <exe>/Shaders, so any pipeline can use it by bare
+// name (`shader: Bloom.slang`). See DefaultProject's BloomTint.slang for the custom
+// project-shader example.
 //
 // Bindings match the .ehpipeline pass inputs: hdr = sampled (binding 0), bloom = storage
 // image (binding 1). ExecuteComputePass binds each at its authored YAML binding.

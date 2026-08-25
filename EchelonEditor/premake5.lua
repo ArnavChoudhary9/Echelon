@@ -44,127 +44,58 @@ project "EchelonEditor"
         ("ECHELON_DEFAULT_RENDERER=\"" .. defaultRenderer .. "\""),
     }
 
-    -- Copy the engine + the selected renderer shared library next to the editor
-    -- executable after build. Only the chosen renderer (`--renderer=<name>`) is
-    -- copied, so a custom default keeps the package free of unused plugins.
-    -- The starter "DefaultProject" template lives at the repo root and is seeded
-    -- into the working directory next to the editor. This is an EDITOR asset only
-    -- — the engine itself never depends on it and regenerates a project at runtime
-    -- if none is present (see Application::InitializeProject). The copy is
-    -- no-clobber: an existing working-dir project (with the user's edits) is left
-    -- untouched, and it is re-seeded only after being deleted.
+    -- ============================================================
+    -- Assemble the runtime directory next to the editor executable
+    -- ============================================================
+    -- Everything platform-agnostic is copied once via cross-platform premake tokens
+    -- (the copy helpers live in Dependencies.lua and discover their file lists by glob,
+    -- so new shaders / runtime libs / resources ship with no build edits). Only the
+    -- shared-library filenames and the no-clobber seeds differ per OS — those stay in
+    -- the small per-system blocks below.
+    filter {}
+        -- Slang runtime libs beside the exe (libEchelon also carries its own copy).
+        SlangRuntimeCopy("%{cfg.buildtarget.directory}")
+
+        -- Shaders → <exe>/Shaders: the selected renderer's shaders (Ray.slang ABI,
+        -- PBR + PBR.ehmaterialtype, Flat/Error fallbacks, shadow + IBL + Bloom/Tonemap)
+        -- and the editor-owned object-id (EntityID) shader.
+        CopyShaders("%{cfg.buildtarget.directory}",
+                    defaultRenderer .. "/Shaders",
+                    "EchelonEditor/Shaders")
+
+        -- Editor resources: icons + fonts (always refreshed to match the build).
+        CopyGlob("EchelonEditor/Resources/Icons/*.png",
+                 "%{cfg.buildtarget.directory}/EditorResources/Icons")
+        CopyGlob("EchelonEditor/Resources/Fonts/opensans/*.ttf",
+                 "%{cfg.buildtarget.directory}/EditorResources/Fonts/opensans")
+
+    -- ---- Per-OS: shared-library names + no-clobber seeds ----
+    -- Copy the engine + the selected renderer shared library (OS-specific prefix/
+    -- extension) beside the exe. Only the chosen renderer (`--renderer=<name>`) is
+    -- copied, keeping the package free of unused plugins. DefaultProject and imgui.ini
+    -- are seeded ONLY if absent, so a user's working-dir edits survive rebuilds (this
+    -- "copy if missing" needs a per-OS conditional command with no premake token).
     filter "system:windows"
-        postbuildcommands
-        {
+        postbuildcommands {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/Echelon.dll %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/" .. defaultRenderer .. ".dll %{cfg.buildtarget.directory}"),
-            -- NOTE: Windows requires its own vendored Slang binaries (slang.dll +
-            -- slang-glslang.dll) copied here — the repo currently vendors Linux libs only.
-            -- Copy Slang shaders next to the executable.
-            -- Ray.slang is the Ray renderer's shader ABI (import Ray) — renderer-owned.
-            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
-            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
-            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Ray.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.ehmaterialtype %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
-            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
-            -- Seed the DefaultProject template (only if the target does not exist)
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}/DefaultProject\" xcopy /E /I /Q /Y \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
-            "{MKDIR} %{cfg.buildtarget.directory}\\EditorResources\\Icons",
-            ("xcopy /Y /Q \"%{wks.location}\\EchelonEditor\\Resources\\Icons\\*.png\" \"%{cfg.buildtarget.directory}\\EditorResources\\Icons\\\""),
-            "{MKDIR} %{cfg.buildtarget.directory}\\EditorResources\\Fonts\\opensans",
-            ("xcopy /Y /Q \"%{wks.location}\\EchelonEditor\\Resources\\Fonts\\opensans\\*.ttf\" \"%{cfg.buildtarget.directory}\\EditorResources\\Fonts\\opensans\\\""),
             ("IF NOT EXIST \"%{cfg.buildtarget.directory}\\imgui.ini\" copy /Y \"%{wks.location}\\EchelonEditor\\Resources\\imgui.ini\" \"%{cfg.buildtarget.directory}\\imgui.ini\""),
         }
 
     filter "system:linux"
-        postbuildcommands
-        {
+        postbuildcommands {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.so %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".so %{cfg.buildtarget.directory}"),
-            -- Copy the prebuilt Slang runtime libs next to the executable (beside
-            -- libEchelon.so, which NEEDs libslang-compiler and dlopens glslang).
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-compiler.so.0.2026.14.1 %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glslang-2026.14.1.so %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-glsl-module-2026.14.1.so %{cfg.buildtarget.directory}",
-            "{COPYFILE} %{wks.location}/Vendor/slang/lib/libslang-rt.so.0.2026.14.1 %{cfg.buildtarget.directory}",
-            -- Copy Slang shaders next to the executable.
-            -- Ray.slang is the Ray renderer's shader ABI (import Ray) — renderer-owned.
-            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
-            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
-            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Ray.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.ehmaterialtype %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
-            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
-            -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
-            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
-            "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
-            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans",
-            "cp -f %{wks.location}/EchelonEditor/Resources/Fonts/opensans/*.ttf %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans/",
             ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 
     filter "system:macosx"
-        postbuildcommands
-        {
+        postbuildcommands {
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/Echelon/libEchelon.dylib %{cfg.buildtarget.directory}"),
             ("{COPYFILE} %{wks.location}/bin/" .. outputdir .. "/" .. defaultRenderer .. "/lib" .. defaultRenderer .. ".dylib %{cfg.buildtarget.directory}"),
-            -- NOTE: macOS requires its own vendored Slang binaries (libslang.dylib +
-            -- libslang-glslang.dylib) copied here — the repo currently vendors Linux libs only.
-            -- Copy Slang shaders next to the executable.
-            -- Ray.slang is the Ray renderer's shader ABI (import Ray) — renderer-owned.
-            -- Flat/Error are fallback shaders; PBR is the standard material (Ray renderer).
-            -- Shadow (ShadowDepth/ShadowCube) + IBL (IblCommon/Sky/IrradianceConv/Prefilter/BrdfLUT) too.
-            "{MKDIR} %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Ray.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Flat.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Error.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/PBR.ehmaterialtype %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowDepth.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/ShadowCube.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IblCommon.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Sky.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/IrradianceConv.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Prefilter.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/BrdfLUT.slang %{cfg.buildtarget.directory}/Shaders",
-            "{COPYFILE} %{wks.location}/Ray/Shaders/Tonemap.slang %{cfg.buildtarget.directory}/Shaders",
-            -- EDITOR-owned shaders (not part of any renderer/runtime): the object-id pass.
-            "{COPYFILE} %{wks.location}/EchelonEditor/Shaders/EntityID.slang %{cfg.buildtarget.directory}/Shaders",
-            -- Seed the DefaultProject template (only if the target does not exist)
             ("test -d \"%{cfg.buildtarget.directory}/DefaultProject\" || cp -r \"%{wks.location}/DefaultProject\" \"%{cfg.buildtarget.directory}/DefaultProject\""),
-            -- Copy editor resources: icons + fonts always (overwrite), imgui.ini only on first build.
-            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Icons",
-            "cp -f %{wks.location}/EchelonEditor/Resources/Icons/*.png %{cfg.buildtarget.directory}/EditorResources/Icons/",
-            "{MKDIR} %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans",
-            "cp -f %{wks.location}/EchelonEditor/Resources/Fonts/opensans/*.ttf %{cfg.buildtarget.directory}/EditorResources/Fonts/opensans/",
             ("test -f \"%{cfg.buildtarget.directory}/imgui.ini\" || cp \"%{wks.location}/EchelonEditor/Resources/imgui.ini\" \"%{cfg.buildtarget.directory}/imgui.ini\""),
         }
 

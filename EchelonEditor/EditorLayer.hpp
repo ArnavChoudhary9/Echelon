@@ -557,7 +557,7 @@ private:
         addMesh("Sphere_Orange",  "Sphere",           "Materials/Orange.ehmaterial",  {  3, 0.6f, -1 },  { 1.2f, 1.2f, 1.2f });
         addMesh("Sphere_Rough",   "Sphere",           "Materials/Rough.ehmaterial",   {  6, 0.6f, -1 },  { 1.2f, 1.2f, 1.2f });
         addMesh("Cube",           "Cube",             "Materials/Lit.ehmaterial",     { -2.5f, 0.6f, 3 },{ 1.2f, 1.2f, 1.2f }, { 0, 25, 0 });
-        addMesh("Monkey",         "Meshs/Monkey.obj", "Materials/Orange.ehmaterial",  {  2.5f, 1.0f, 3 },{ 1, 1, 1 },          { 0, -35, 0 });
+        addMesh("Monkey",         "Meshes/Monkey.obj","Materials/Orange.ehmaterial",  {  2.5f, 1.0f, 3 },{ 1, 1, 1 },          { 0, -35, 0 });
 
         {
             Entity sun = scene.AddEntity("Sun");

@@ -195,9 +195,9 @@ namespace Echelon {
             target.format  = SLANG_SPIRV;
             target.profile = global->findProfile("spirv_1_5");
 
-            // Search paths: the shader's own directory + the engine shader-include
-            // directory (<exe>/Shaders), where the engine ships Echelon.slang — so
-            // any shader anywhere can `import Echelon;` (the shared constant system).
+            // Search paths: the shader's own directory + the shader-include directory
+            // (<exe>/Shaders), where the renderer ships its shared modules (e.g. Ray.slang)
+            // — so any shader anywhere can `import` them (the shared constant system).
             const std::string dir       = ctx.GetPath().parent_path().string();
             const std::string engineDir = (RendererLoader::ExecutableDir() / "Shaders").string();
 

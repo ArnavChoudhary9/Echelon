@@ -27,10 +27,16 @@ Dep["stb"]           = { include = "%{wks.location}/Vendor/stb" }
 Dep["ImGUI"]         = { include = "%{wks.location}/Vendor/ImGUI",
                          backends = "%{wks.location}/Vendor/ImGUI/backends",
                          link = "ImGUI" }
--- Slang is a *prebuilt* SDK: it is not compiled in Vendor/premake5.lua. It carries a
--- 'libdir' (link-time search path for libslang.so) in addition to include/link.
+-- Slang is a *prebuilt* SDK fetched per-platform by scripts/setup.py (NOT committed and
+-- NOT compiled in Vendor/premake5.lua). setup.py lays out three dirs under Vendor/slang:
+--   include/   headers               → 'include' below
+--   lib/       link-time libs        → 'libdir' below (libslang.so / slang.lib, incl. symlinks)
+--   runtime/   exactly the shared libs to ship beside the binaries (real files, no extras)
+-- 'runtime' is a plain repo-relative path (no %{token}) because SlangRuntimeCopy() globs it
+-- with os.matchfiles at generation time. See the copy helpers at the bottom of this file.
 Dep["slang"]         = { include = "%{wks.location}/Vendor/slang/include",
                          libdir  = "%{wks.location}/Vendor/slang/lib",
+                         runtime = "Vendor/slang/runtime",
                          link    = "slang" }
 
 -- IncludeDir kept for use in filter-scoped token expressions like %{IncludeDir.spdlog}
@@ -63,4 +69,48 @@ function LinkDeps(...)
         table.insert(libs, dep.link)
     end
     links(libs)
+end
+
+-- ============================================================
+-- Postbuild copy helpers
+-- ============================================================
+-- premake's {COPYFILE}/{MKDIR} tokens are cross-platform, so runtime-dir assembly
+-- (shared libs, shaders, editor resources) needs NO per-OS postbuild duplication.
+-- File lists are discovered by glob at generation time, so adding a shader / runtime
+-- lib / resource requires no build edits.
+--
+-- _MAIN_SCRIPT_DIR is the repo root (dir of the root premake5.lua), used to resolve
+-- glob patterns to real files now; the emitted copy commands use %{wks.location}
+-- (also the repo root) so paths resolve again at build time.
+
+-- Copy every file matching `pattern` (repo-root-relative) into `destDir`.
+-- Creates destDir first. Returns the number of files matched.
+function CopyGlob(pattern, destDir)
+    local files = os.matchfiles(_MAIN_SCRIPT_DIR .. "/" .. pattern)
+    local cmds = { "{MKDIR} " .. destDir }
+    for _, f in ipairs(files) do
+        local rel = path.getrelative(_MAIN_SCRIPT_DIR, f)
+        table.insert(cmds, "{COPYFILE} %{wks.location}/" .. rel .. " " .. destDir)
+    end
+    postbuildcommands(cmds)
+    return #files
+end
+
+-- Ship the Slang runtime shared libs (populated by scripts/setup.py) next to `destDir`.
+-- Version-agnostic: whatever setup.py curated into Vendor/slang/runtime is copied.
+function SlangRuntimeCopy(destDir)
+    if CopyGlob(Dep.slang.runtime .. "/*", destDir) == 0 then
+        print("premake: WARNING '" .. Dep.slang.runtime ..
+              "' is empty — run 'python3 scripts/setup.py' before building.")
+    end
+end
+
+-- Copy shader assets (*.slang + *.ehmaterialtype) from each `dir` (repo-root-relative)
+-- into <destDir>/Shaders. e.g. CopyShaders(dest, "Ray/Shaders", "EchelonEditor/Shaders")
+function CopyShaders(destDir, ...)
+    local shaderDir = destDir .. "/Shaders"
+    for _, dir in ipairs({...}) do
+        CopyGlob(dir .. "/*.slang", shaderDir)
+        CopyGlob(dir .. "/*.ehmaterialtype", shaderDir)
+    end
 end
