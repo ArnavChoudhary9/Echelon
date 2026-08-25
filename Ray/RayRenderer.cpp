@@ -503,14 +503,18 @@ namespace Echelon {
         BindSystemConstants(pipeline);   // binds g_Object + g_ShadowPass by name
         const auto& shader = pipeline->GetShader();
 
+        // Opaque geometry only casts into the depth/distance map (transparent draws don't
+        // write depth). Iterate pipeline groups → instance groups → mesh batches.
         for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
-            for (const auto& batch : group.Batches) {
-                for (size_t i = 0; i < batch.Transforms.size(); ++i) {
-                    const auto& transform = batch.Transforms[i];
-                    if (batch.IndexBuffer && batch.IndexCount > 0)
-                        DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader, transform, batch.IndexCount);
-                    else
-                        Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
+            for (const auto& inst : group.Instances) {
+                for (const auto& batch : inst.Batches) {
+                    for (size_t i = 0; i < batch.Transforms.size(); ++i) {
+                        const auto& transform = batch.Transforms[i];
+                        if (batch.IndexBuffer && batch.IndexCount > 0)
+                            DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader, transform, batch.IndexCount);
+                        else
+                            Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
+                    }
                 }
             }
         }
@@ -523,15 +527,16 @@ namespace Echelon {
         glm::vec3 bmin(1e9f), bmax(-1e9f);
         bool hasGeo = false;
         for (const auto& group : m_RenderGraph.GetPipelineGroups())
-            for (const auto& batch : group.Batches)
-                for (const auto& t : batch.Transforms) {
-                    const glm::vec3 p = glm::vec3(t[3]);
-                    const float r = 0.87f * glm::max(glm::length(glm::vec3(t[0])),
-                                          glm::max(glm::length(glm::vec3(t[1])), glm::length(glm::vec3(t[2]))));
-                    bmin = glm::min(bmin, p - glm::vec3(r));
-                    bmax = glm::max(bmax, p + glm::vec3(r));
-                    hasGeo = true;
-                }
+            for (const auto& inst : group.Instances)
+                for (const auto& batch : inst.Batches)
+                    for (const auto& t : batch.Transforms) {
+                        const glm::vec3 p = glm::vec3(t[3]);
+                        const float r = 0.87f * glm::max(glm::length(glm::vec3(t[0])),
+                                              glm::max(glm::length(glm::vec3(t[1])), glm::length(glm::vec3(t[2]))));
+                        bmin = glm::min(bmin, p - glm::vec3(r));
+                        bmax = glm::max(bmax, p + glm::vec3(r));
+                        hasGeo = true;
+                    }
         const glm::vec3 center = hasGeo ? (bmin + bmax) * 0.5f : glm::vec3(0.0f);
         float radius = hasGeo ? glm::length(bmax - center) + 1.0f : 15.0f;
         radius = glm::max(radius, 1.0f);
@@ -1097,10 +1102,15 @@ namespace Echelon {
     // ------------------------------------------------------------------
 
     void RayRenderer::ExecuteDrawList(const PassContext& ctx) {
-        // Override-shader pass: draw ALL scene geometry with one pipeline (a generic
-        // capability — depth prepass, object-id pass for picking, normals, wireframe…),
-        // instead of each entity's material pipeline. The shader reads g_Object.ObjectId
-        // (set per draw below) for any per-object work.
+        // Keep the transparent bucket ordered back-to-front for the current camera (cheap
+        // per-frame sort of an already-built list; the camera can move without a rebuild).
+        const glm::vec3 camPos = glm::vec3(glm::inverse(m_ViewMatrix)[3]);
+        m_RenderGraph.SortTransparent(camPos);
+
+        // Override-shader pass: draw ALL scene geometry (opaque + transparent) with one
+        // pipeline (a generic capability — depth prepass, object-id pass for picking,
+        // normals, wireframe…), instead of each entity's material pipeline. The shader
+        // reads g_Object.ObjectId (set per draw below) for any per-object work.
         const bool useOverride = ctx.Pass && !ctx.Pass->Shader.empty();
         if (useOverride) {
             Ref<Pipeline> pipe = GetOverridePipeline(ctx.Pass->Name, ctx.Pass->Shader);
@@ -1109,8 +1119,45 @@ namespace Echelon {
             BindSystemConstants(pipe);   // g_Frame + g_Object at this shader's bindings
             const auto& shader = pipe->GetShader();
 
-            for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
-                for (const auto& batch : group.Batches) {
+            auto drawOne = [&](const Ref<Buffer>& vb, const Ref<Buffer>& ib,
+                               uint32_t vc, uint32_t ic, const glm::mat4& transform, uint32_t entityId) {
+                m_CurrentObjectId = entityId;
+                if (ib && ic > 0) DrawIndexed(vb, ib, shader, transform, ic);
+                else              Draw(vb, shader, transform, vc);
+            };
+
+            for (const auto& group : m_RenderGraph.GetPipelineGroups())
+                for (const auto& inst : group.Instances)
+                    for (const auto& batch : inst.Batches)
+                        for (size_t i = 0; i < batch.Transforms.size(); ++i)
+                            drawOne(batch.VertexBuffer, batch.IndexBuffer, batch.VertexCount,
+                                    batch.IndexCount, batch.Transforms[i],
+                                    (i < batch.EntityIDs.size()) ? batch.EntityIDs[i] : 0u);
+
+            for (const auto& td : m_RenderGraph.GetTransparentDraws())
+                drawOne(td.VertexBuffer, td.IndexBuffer, td.VertexCount, td.IndexCount,
+                        td.Transform, td.EntityID);
+            return;
+        }
+
+        // Normal path (opaque): pipeline + system set bound ONCE per pipeline group; the
+        // material descriptor set bound ONCE per instance group; only the per-object
+        // transform (g_Object) updates per draw.
+        for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
+            const auto& pipeline = group.PipelineRef ? group.PipelineRef : GetErrorPipeline();
+            if (!pipeline) continue;
+
+            m_CommandBuffer->BindPipeline(pipeline);
+            BindSystemConstants(pipeline);   // g_Frame + g_Object at this shader's bindings
+            const auto& shader = pipeline->GetShader();
+
+            for (const auto& inst : group.Instances) {
+                // This instance's material params/textures (null for the default pipeline).
+                // Its bindings never collide with the system set (Slang assigns unique ones).
+                if (inst.MaterialSet)
+                    m_CommandBuffer->BindDescriptorSet(inst.MaterialSet, 1);
+
+                for (const auto& batch : inst.Batches) {
                     for (size_t i = 0; i < batch.Transforms.size(); ++i) {
                         m_CurrentObjectId = (i < batch.EntityIDs.size()) ? batch.EntityIDs[i] : 0u;
                         const auto& transform = batch.Transforms[i];
@@ -1121,36 +1168,34 @@ namespace Echelon {
                     }
                 }
             }
-            return;
         }
 
-        // Normal path: each pipeline group uses its own (material) pipeline.
-        for (const auto& group : m_RenderGraph.GetPipelineGroups()) {
-            const auto& pipeline = group.PipelineRef ? group.PipelineRef : GetErrorPipeline();
+        // Transparent bucket: drawn after opaque, back-to-front. Not grouped (depth order
+        // wins), so bind pipeline/system + material set as they change along the sorted list.
+        Pipeline*      lastPipe = nullptr;
+        DescriptorSet* lastSet  = nullptr;
+        Ref<Shader>    curShader;
+        for (const auto& td : m_RenderGraph.GetTransparentDraws()) {
+            const auto& pipeline = td.PipelineRef ? td.PipelineRef : GetErrorPipeline();
             if (!pipeline) continue;
 
-            m_CommandBuffer->BindPipeline(pipeline);
-            BindSystemConstants(pipeline);   // g_Frame + g_Object at this shader's bindings
-            const auto& shader = pipeline->GetShader();
-
-            for (const auto& batch : group.Batches) {
-                for (size_t i = 0; i < batch.Transforms.size(); ++i) {
-                    // Per-entity material parameters/textures (null for the default
-                    // pipeline). Bound before the draw; its bindings never collide
-                    // with the system set within a shader (Slang assigns unique ones).
-                    if (i < batch.MaterialSets.size() && batch.MaterialSets[i])
-                        m_CommandBuffer->BindDescriptorSet(batch.MaterialSets[i], 1);
-
-                    m_CurrentObjectId = (i < batch.EntityIDs.size()) ? batch.EntityIDs[i] : 0u;
-                    const auto& transform = batch.Transforms[i];
-                    if (batch.IndexBuffer && batch.IndexCount > 0) {
-                        DrawIndexed(batch.VertexBuffer, batch.IndexBuffer, shader,
-                                    transform, batch.IndexCount);
-                    } else {
-                        Draw(batch.VertexBuffer, shader, transform, batch.VertexCount);
-                    }
-                }
+            if (pipeline.get() != lastPipe) {
+                m_CommandBuffer->BindPipeline(pipeline);
+                BindSystemConstants(pipeline);
+                curShader = pipeline->GetShader();
+                lastPipe  = pipeline.get();
+                lastSet   = nullptr;   // a new pipeline needs its set rebound
             }
+            if (td.MaterialSet && td.MaterialSet.get() != lastSet) {
+                m_CommandBuffer->BindDescriptorSet(td.MaterialSet, 1);
+                lastSet = td.MaterialSet.get();
+            }
+
+            m_CurrentObjectId = td.EntityID;
+            if (td.IndexBuffer && td.IndexCount > 0)
+                DrawIndexed(td.VertexBuffer, td.IndexBuffer, curShader, td.Transform, td.IndexCount);
+            else
+                Draw(td.VertexBuffer, curShader, td.Transform, td.VertexCount);
         }
     }
 

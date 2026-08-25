@@ -1,6 +1,6 @@
 Material:
   # Standard PBR material — flat orange dielectric.
-  Shader: shader:PBR.slang
+  Template: PBR.ehmaterialtype
   Params:
     BaseColor:
       Type: Float4

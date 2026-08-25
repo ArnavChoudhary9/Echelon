@@ -1,6 +1,6 @@
 Material:
   # Glossy red dielectric.
-  Shader: shader:PBR.slang
+  Template: PBR.ehmaterialtype
   Params:
     BaseColor: { Type: Float4, Value: [0.80, 0.10, 0.10, 1.0] }
     Metallic:  { Type: Float,  Value: [0.0] }

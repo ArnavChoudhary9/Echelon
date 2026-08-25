@@ -3,6 +3,12 @@
 #include "Echelon/ImGui/Panel.hpp"
 #include "EditorContext.hpp"
 
+#include "Echelon/Asset/AssetManager.hpp"
+#include "Echelon/Asset/Material/Material.hpp"
+#include "Echelon/Asset/Material/MaterialTemplate.hpp"
+#include "Echelon/Asset/Importers/Material/MaterialImporter.hpp"          // SaveMaterial
+#include "Echelon/Asset/Importers/Material/MaterialTemplateImporter.hpp"  // SaveMaterialTemplate
+
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -60,6 +66,43 @@ private:
         if (!canUp) ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Up");
+
+        // ---- Create new assets in the current folder -----------------------
+        ImGui::SameLine();
+        if (ImGui::Button("+ New")) ImGui::OpenPopup("##cbnew");
+        if (ImGui::BeginPopup("##cbnew")) {
+            if (ImGui::MenuItem("Material"))          CreateMaterial();
+            if (ImGui::MenuItem("Material Template")) CreateMaterialTemplate();
+            ImGui::EndPopup();
+        }
+    }
+
+    // ---- Asset creation ------------------------------------------------
+    fs::path UniquePath(const std::string& stem, const std::string& ext) const {
+        fs::path p = m_CurrentPath / (stem + ext);
+        for (int i = 1; fs::exists(p); ++i)
+            p = m_CurrentPath / (stem + std::to_string(i) + ext);
+        return p;
+    }
+
+    // A new material instance on the built-in PBR template, seeded with sane params.
+    void CreateMaterial() {
+        auto mat = CreateRef<Echelon::Material>();
+        mat->TemplateSource = "PBR.ehmaterialtype";
+        mat->Params["BaseColor"] = Echelon::MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+        mat->Params["Metallic"]  = Echelon::MaterialParam::Make(0.0f);
+        mat->Params["Roughness"] = Echelon::MaterialParam::Make(0.5f);
+        mat->Params["Occlusion"] = Echelon::MaterialParam::Make(1.0f);
+        Echelon::SaveMaterial(mat, UniquePath("NewMaterial", ".ehmaterial"));
+    }
+
+    // A new material template — a copy of the built-in PBR template as a starting point.
+    void CreateMaterialTemplate() {
+        auto& assets = Echelon::AssetManager::Get();
+        Echelon::UUID h = assets.GetHandle("PBR.ehmaterialtype");
+        auto tmpl = h.IsNull() ? nullptr : assets.GetAssetAs<Echelon::MaterialTemplate>(h);
+        if (tmpl)
+            Echelon::SaveMaterialTemplate(tmpl, UniquePath("NewMaterialTemplate", ".ehmaterialtype"));
     }
 
     // ---- Breadcrumb ----------------------------------------------------
@@ -252,7 +295,8 @@ private:
     }
 
     static const char* ExtLabel(const std::string& ext) {
-        if (ext == ".ehmaterial") return "MAT";
+        if (ext == ".ehmaterial")     return "MAT";
+        if (ext == ".ehmaterialtype") return "MATT";
         if (ext == ".ehpipeline") return "PIPE";
         if (ext == ".ehscene")    return "SCN";
         if (ext == ".slang")      return "SLNG";

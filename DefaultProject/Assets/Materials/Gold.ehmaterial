@@ -1,6 +1,6 @@
 Material:
   # Gold (metallic, tinted F0).
-  Shader: shader:PBR.slang
+  Template: PBR.ehmaterialtype
   Params:
     BaseColor: { Type: Float4, Value: [1.0, 0.76, 0.34, 1.0] }
     Metallic:  { Type: Float,  Value: [1.0] }

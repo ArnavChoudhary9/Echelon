@@ -1,6 +1,7 @@
 #include "Material/RayMaterialCache.hpp"
 
 #include "Echelon/Asset/Material/Material.hpp"
+#include "Echelon/Asset/Material/MaterialTemplate.hpp"
 #include "Echelon/Asset/Material/MaterialParam.hpp"
 #include "Echelon/Asset/Shader/ShaderAsset.hpp"
 #include "Echelon/Asset/Texture/TextureAsset.hpp"
@@ -17,8 +18,6 @@
 namespace Echelon {
 
     // Resolve a shader reference (handle first, then path hint) to a ShaderAsset.
-    // (Relocated from the old Material::UploadGPU — material→GPU translation is the
-    // renderer's job now.)
     static Ref<ShaderAsset> ResolveShader(const UUID& handle, const std::string& source) {
         auto& assets = AssetManager::Get();
         Ref<ShaderAsset> shader = handle.IsNull() ? nullptr : assets.GetAssetAs<ShaderAsset>(handle);
@@ -71,96 +70,103 @@ namespace Echelon {
         }
     }
 
+    Ref<Pipeline> RayMaterialCache::GetOrBuildPipeline(const MaterialTemplate* tmpl, bool transparent,
+                                                       const Ref<ShaderAsset>& shader, RendererAPI* renderer,
+                                                       const Ref<RenderPass>& scenePass) {
+        // Key: template identity + the blend variant (template ptr is ≥2-aligned, so bit 0 is free).
+        const uint64_t key = (reinterpret_cast<uint64_t>(tmpl) & ~1ull) | (transparent ? 1ull : 0ull);
+        if (auto it = m_Pipelines.find(key); it != m_Pipelines.end())
+            return it->second;
+
+        auto device = renderer->GetDevice();
+        const ShaderReflection& refl = shader->GetReflection();
+
+        // Reflection-driven pipeline; render state from the template. Transparent instances
+        // get an alpha-blend variant that does NOT write depth (drawn back-to-front after opaque).
+        PipelineDesc pd;
+        pd.ShaderProgram          = shader->GetGpuShader();
+        pd.Layout                 = StandardVertex::FromReflection(refl);
+        pd.Topology               = tmpl->Topology;
+        pd.Depth.DepthTestEnable  = tmpl->DepthTest;
+        pd.Depth.DepthWriteEnable = transparent ? false : tmpl->DepthWrite;
+        pd.Raster.Cull            = tmpl->Cull;
+        pd.Raster.Winding         = tmpl->Winding;
+        if (transparent) {
+            BlendAttachment ba;
+            ba.BlendEnable   = true;
+            ba.SrcColorBlend = BlendFactor::SrcAlpha;
+            ba.DstColorBlend = BlendFactor::OneMinusSrcAlpha;
+            ba.ColorBlendOp  = BlendOp::Add;
+            ba.SrcAlphaBlend = BlendFactor::One;
+            ba.DstAlphaBlend = BlendFactor::OneMinusSrcAlpha;
+            ba.AlphaBlendOp  = BlendOp::Add;
+            pd.Blend.Attachments.push_back(ba);
+        }
+        pd.Pass      = scenePass;   // compatible with the scene ("forward") pass
+        pd.DebugName = transparent ? "Material_Pipeline(blend)" : "Material_Pipeline";
+
+        auto pipe = device->CreatePipeline(pd);
+        m_Pipelines[key] = pipe;
+        return pipe;
+    }
+
     const RayMaterialCache::MaterialGpu&
     RayMaterialCache::GetOrBuild(const Ref<Material>& mat, RendererAPI* renderer,
                                  const Ref<RenderPass>& scenePass) {
-        if (auto it = m_Materials.find(mat.get()); it != m_Materials.end())
-            return it->second;
+        InstanceEntry& e = m_Materials[mat.get()];   // default-constructs on first use
 
-        MaterialGpu gpu;
+        Ref<MaterialTemplate> tmpl   = mat->GetTemplate();
+        Ref<ShaderAsset>      shader = tmpl ? ResolveShader(tmpl->ShaderHandle, tmpl->ShaderSource) : nullptr;
 
         auto device = renderer ? renderer->GetDevice() : nullptr;
-        Ref<ShaderAsset> shader = ResolveShader(mat->ShaderHandle, mat->ShaderSource);
-        if (device && shader) {
-            shader->UploadGPU(renderer);   // no-op if already uploaded
-            if (shader->GetGpuShader()) {
-                const ShaderReflection& refl = shader->GetReflection();
+        if (!tmpl) {
+            ECHELON_LOG_ERROR("[RayMaterial] material could not resolve its template '{}'", mat->TemplateSource);
+            return e.Gpu;
+        }
+        if (!shader) {
+            ECHELON_LOG_ERROR("[RayMaterial] template could not resolve its shader '{}'", tmpl->ShaderSource);
+            return e.Gpu;
+        }
+        if (!device) return e.Gpu;
 
-                // Reflection-driven pipeline (vertex layout from reflection — no
-                // hand-written attributes). Back-face culling (front = CCW): engine
-                // primitives + OBJ meshes are wound CCW-outward.
-                PipelineDesc pd;
-                pd.ShaderProgram          = shader->GetGpuShader();
-                pd.Layout                 = StandardVertex::FromReflection(refl);
-                pd.Topology               = PrimitiveTopology::TriangleList;
-                pd.Depth.DepthTestEnable  = true;
-                pd.Depth.DepthWriteEnable = true;
-                pd.Raster.Cull            = CullMode::Back;
-                pd.Raster.Winding         = FrontFace::CounterClockwise;
-                pd.Pass                   = scenePass;   // compatible with the scene ("forward") pass
-                pd.DebugName              = "Material_Pipeline";
-                gpu.PipelineRef = device->CreatePipeline(pd);
-
-                // Bind real texture assets to reflected samplers by name (white fallback
-                // for any sampler without a matching entry in the material's Textures).
-                EnsureFallbacks(renderer);
-                Material* m = mat.get();
-                auto resolver = [m, renderer](const std::string& samplerName) -> Ref<Texture> {
-                    auto it = m->Textures.find(samplerName);
-                    if (it == m->Textures.end()) return nullptr;   // → white fallback
-                    return ResolveMaterialTexture(renderer, samplerName, it->second);
-                };
-
-                gpu.Base = BuildMaterialResources(renderer, refl, m_WhiteTexture,
-                                                  m_DefaultSampler, resolver);
-                PackMaterialResources(gpu.Base,
-                    [m](const std::string& name) { return m->Resolve(name); });
-            } else {
-                ECHELON_LOG_ERROR("[RayMaterial] shader '{}' failed to build a GPU program",
-                                  mat->ShaderSource);
-            }
-        } else if (!shader) {
-            ECHELON_LOG_ERROR("[RayMaterial] material could not resolve its shader '{}'",
-                              mat->ShaderSource);
+        shader->UploadGPU(renderer);   // no-op if already uploaded
+        if (!shader->GetGpuShader()) {
+            ECHELON_LOG_ERROR("[RayMaterial] shader '{}' failed to build a GPU program", tmpl->ShaderSource);
+            return e.Gpu;
         }
 
-        return m_Materials.emplace(mat.get(), std::move(gpu)).first->second;
-    }
+        const bool templateChanged = (e.BuiltTemplate != tmpl.get());
+        const bool needResources   = templateChanged || (e.BuiltVersion != mat->Version) || !e.Gpu.Base.Set;
+        const bool needPipeline    = templateChanged || (e.BuiltTransparent != mat->Transparent) || !e.Gpu.PipelineRef;
 
-    void RayMaterialCache::BuildOverride(uint32_t entityId, const Ref<Material>& mat,
-                                         const std::unordered_map<std::string, MaterialParam>& overrides,
-                                         RendererAPI* renderer) {
-        Ref<ShaderAsset> shader = ResolveShader(mat->ShaderHandle, mat->ShaderSource);
-        if (!shader || !shader->GetGpuShader()) {
-            m_Overrides.erase(entityId);
-            return;
+        if (needPipeline)
+            e.Gpu.PipelineRef = GetOrBuildPipeline(tmpl.get(), mat->Transparent, shader, renderer, scenePass);
+
+        if (needResources) {
+            // Bind real texture assets to reflected samplers by name (white fallback for any
+            // sampler without a matching entry in the instance's Textures).
+            EnsureFallbacks(renderer);
+            Material* m = mat.get();
+            auto resolver = [m, renderer](const std::string& samplerName) -> Ref<Texture> {
+                auto it = m->Textures.find(samplerName);
+                if (it == m->Textures.end()) return nullptr;   // → white fallback
+                return ResolveMaterialTexture(renderer, samplerName, it->second);
+            };
+            e.Gpu.Base = BuildMaterialResources(renderer, shader->GetReflection(),
+                                                m_WhiteTexture, m_DefaultSampler, resolver);
+            PackMaterialResources(e.Gpu.Base,
+                [m](const std::string& name) { return m->Resolve(name); });
         }
 
-        // Override set: its own param UBO only (no textures — those come from the base
-        // set). Values resolve override → base material → shader default.
-        MaterialGpuResources res =
-            BuildMaterialResources(renderer, shader->GetReflection(), nullptr, nullptr);
-        Material* m = mat.get();
-        PackMaterialResources(res, [&overrides, m](const std::string& name) -> const MaterialParam* {
-            auto it = overrides.find(name);
-            if (it != overrides.end()) return &it->second;
-            return m->Resolve(name);
-        });
-        m_Overrides[entityId] = std::move(res);
-    }
-
-    Ref<DescriptorSet> RayMaterialCache::GetOverride(uint32_t entityId) const {
-        auto it = m_Overrides.find(entityId);
-        return it != m_Overrides.end() ? it->second.Set : nullptr;
-    }
-
-    void RayMaterialCache::DropOverride(uint32_t entityId) {
-        m_Overrides.erase(entityId);
+        e.BuiltTemplate    = tmpl.get();
+        e.BuiltVersion     = mat->Version;
+        e.BuiltTransparent = mat->Transparent;
+        return e.Gpu;
     }
 
     void RayMaterialCache::Clear() {
+        m_Pipelines.clear();
         m_Materials.clear();
-        m_Overrides.clear();
         m_WhiteTexture   = nullptr;
         m_DefaultSampler = nullptr;
     }

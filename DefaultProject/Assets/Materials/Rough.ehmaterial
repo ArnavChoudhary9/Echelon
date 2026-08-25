@@ -1,6 +1,6 @@
 Material:
   # Matte solid dielectric — the rough end of the sphere metallic→rough row.
-  Shader: shader:PBR.slang
+  Template: PBR.ehmaterialtype
   Params:
     BaseColor: { Type: Float4, Value: [0.72, 0.73, 0.75, 1.0] }
     Metallic:  { Type: Float,  Value: [0.0] }

@@ -48,8 +48,8 @@ namespace Echelon {
             YAML::Node node = root["Material"] ? root["Material"] : root;
 
             auto mat = CreateRef<Material>();
-            mat->ShaderSource = node["Shader"].as<std::string>("");
-            mat->ParentSource = node["Parent"].as<std::string>("");
+            mat->TemplateSource = node["Template"].as<std::string>("");
+            mat->Transparent    = node["Transparent"].as<bool>(false);
 
             if (const YAML::Node params = node["Params"]) {
                 for (const auto& kv : params)
@@ -60,8 +60,8 @@ namespace Echelon {
                     mat->Textures[kv.first.as<std::string>()] = kv.second.as<std::string>("");
             }
 
-            ECHELON_LOG_INFO("[MaterialImporter] Loaded '{}' (shader '{}', {} params, {} textures).",
-                             path, mat->ShaderSource, mat->Params.size(), mat->Textures.size());
+            ECHELON_LOG_INFO("[MaterialImporter] Loaded '{}' (template '{}', {} params, {} textures).",
+                             path, mat->TemplateSource, mat->Params.size(), mat->Textures.size());
             return ImportResult(mat);
         }
         catch (const std::exception& e) {
@@ -76,9 +76,9 @@ namespace Echelon {
         YAML::Emitter out;
         out << YAML::BeginMap;
         out << YAML::Key << "Material" << YAML::Value << YAML::BeginMap;
-        out << YAML::Key << "Shader" << YAML::Value << material->ShaderSource;
-        if (!material->ParentSource.empty())
-            out << YAML::Key << "Parent" << YAML::Value << material->ParentSource;
+        out << YAML::Key << "Template" << YAML::Value << material->TemplateSource;
+        if (material->Transparent)
+            out << YAML::Key << "Transparent" << YAML::Value << true;
 
         out << YAML::Key << "Params" << YAML::Value << YAML::BeginMap;
         for (const auto& [name, p] : material->Params)

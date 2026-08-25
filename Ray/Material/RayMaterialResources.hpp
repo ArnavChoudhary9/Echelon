@@ -45,8 +45,16 @@ namespace Echelon {
         bool IsValid() const { return Set != nullptr; }
     };
 
-    /** @brief Locate the material parameter block (first non-system UBO) in a reflection. */
+    /**
+     * @brief Locate the material parameter block in a reflection.
+     *
+     * Prefers the conventional name `g_Material` (the ABI's material UBO — see Ray.slang),
+     * so discovery is deterministic even if a shader declares several non-system UBOs.
+     * Falls back to the first non-system UBO for shaders that predate the convention.
+     */
     inline const ReflectedUniformBuffer* FindMaterialBlock(const ShaderReflection& refl) {
+        for (const auto& ub : refl.UniformBuffers)
+            if (ub.Name == "g_Material") return &ub;
         for (const auto& ub : refl.UniformBuffers)
             if (!IsSystemUBO(ub.Name)) return &ub;
         return nullptr;

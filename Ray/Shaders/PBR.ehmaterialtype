@@ -1,0 +1,25 @@
+MaterialTemplate:
+  # The standard PBR BRDF (Cook-Torrance metallic-roughness). Material instances
+  # reference this template (Template: PBR.ehmaterialtype) and set their own values.
+  Shader: shader:PBR.slang
+  Cull: Back
+  Winding: CCW
+  DepthTest: true
+  DepthWrite: true
+  Topology: TriangleList
+  Params:
+    BaseColor:        { Type: Float4, Default: [0.8, 0.8, 0.8, 1.0], Ui: Color }
+    Emissive:         { Type: Float4, Default: [0.0, 0.0, 0.0, 0.0], Ui: Color }
+    Metallic:         { Type: Float,  Default: [0.0] }
+    Roughness:        { Type: Float,  Default: [0.5] }
+    Occlusion:        { Type: Float,  Default: [1.0] }
+    NormalScale:      { Type: Float,  Default: [1.0] }
+    UseAlbedoMap:     { Type: Float,  Default: [0.0] }
+    UseNormalMap:     { Type: Float,  Default: [0.0] }
+    UseMetalRoughMap: { Type: Float,  Default: [0.0] }
+    UseEmissiveMap:   { Type: Float,  Default: [0.0] }
+  Textures:
+    u_Albedo: ""
+    u_Normal: ""
+    u_MetalRough: ""
+    u_Emissive: ""

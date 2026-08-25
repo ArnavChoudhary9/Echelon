@@ -35,30 +35,33 @@ namespace Echelon {
         Mesh,
         Scene,
         Shader,
-        Material,
+        MaterialTemplate,   ///< A BRDF: shader + render-state + param schema (`.ehmaterialtype`).
+        Material,           ///< An instance: a template reference + concrete values (`.ehmaterial`).
         Texture,
         RenderPipeline
     };
 
     inline const char* AssetTypeToString(AssetType type) {
         switch (type) {
-            case AssetType::Mesh:           return "Mesh";
-            case AssetType::Scene:          return "Scene";
-            case AssetType::Shader:         return "Shader";
-            case AssetType::Material:       return "Material";
-            case AssetType::Texture:        return "Texture";
-            case AssetType::RenderPipeline: return "RenderPipeline";
-            default:                        return "None";
+            case AssetType::Mesh:             return "Mesh";
+            case AssetType::Scene:            return "Scene";
+            case AssetType::Shader:           return "Shader";
+            case AssetType::MaterialTemplate: return "MaterialTemplate";
+            case AssetType::Material:         return "Material";
+            case AssetType::Texture:          return "Texture";
+            case AssetType::RenderPipeline:   return "RenderPipeline";
+            default:                          return "None";
         }
     }
 
     inline AssetType AssetTypeFromString(std::string_view s) {
-        if (s == "Mesh")           return AssetType::Mesh;
-        if (s == "Scene")          return AssetType::Scene;
-        if (s == "Shader")         return AssetType::Shader;
-        if (s == "Material")       return AssetType::Material;
-        if (s == "Texture")        return AssetType::Texture;
-        if (s == "RenderPipeline") return AssetType::RenderPipeline;
+        if (s == "Mesh")             return AssetType::Mesh;
+        if (s == "Scene")            return AssetType::Scene;
+        if (s == "Shader")           return AssetType::Shader;
+        if (s == "MaterialTemplate") return AssetType::MaterialTemplate;
+        if (s == "Material")         return AssetType::Material;
+        if (s == "Texture")          return AssetType::Texture;
+        if (s == "RenderPipeline")   return AssetType::RenderPipeline;
         return AssetType::None;
     }
 

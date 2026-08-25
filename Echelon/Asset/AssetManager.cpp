@@ -8,11 +8,13 @@
 #include "Asset/Importers/Scene/SceneImporter.hpp"
 #include "Asset/Importers/Shader/ShaderImporter.hpp"
 #include "Asset/Importers/Material/MaterialImporter.hpp"
+#include "Asset/Importers/Material/MaterialTemplateImporter.hpp"
 #include "Asset/Importers/Texture/TextureImporter.hpp"
 #include "Asset/Importers/RenderPipeline/RenderPipelineImporter.hpp"
 #include "Asset/Mesh/Mesh.hpp"
 #include "Asset/Mesh/Primitives.hpp"
 #include "Asset/Material/Material.hpp"
+#include "Asset/Material/MaterialTemplate.hpp"
 
 #include "Renderer/RendererService.hpp"
 #include "Renderer/RendererLoader.hpp"   // ExecutableDir() for the built-in shader path
@@ -33,6 +35,44 @@ namespace Echelon {
         return s;
     }
 
+    // Built-in PBR template (the standard BRDF). Loaded from the `.ehmaterialtype` file
+    // shipped beside the executable so the file is the single source of truth; the code
+    // fallback below only runs if that file is missing (keeps the engine self-sufficient).
+    static Ref<MaterialTemplate> BuildPbrTemplateFallback() {
+        auto t = CreateRef<MaterialTemplate>();
+        t->ShaderSource = "shader:PBR.slang";
+        auto add = [&](const char* name, MaterialParam def, ParamUi ui = ParamUi::Auto) {
+            MaterialTemplate::ParamDesc pd; pd.Name = name; pd.Type = def.Type; pd.Default = def; pd.Hint = ui;
+            t->Params.push_back(std::move(pd));
+        };
+        add("BaseColor",        MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), ParamUi::Color);
+        add("Emissive",         MaterialParam::Make(glm::vec4(0.0f)),                   ParamUi::Color);
+        add("Metallic",         MaterialParam::Make(0.0f));
+        add("Roughness",        MaterialParam::Make(0.5f));
+        add("Occlusion",        MaterialParam::Make(1.0f));
+        add("NormalScale",      MaterialParam::Make(1.0f));
+        add("UseAlbedoMap",     MaterialParam::Make(0.0f));
+        add("UseNormalMap",     MaterialParam::Make(0.0f));
+        add("UseMetalRoughMap", MaterialParam::Make(0.0f));
+        add("UseEmissiveMap",   MaterialParam::Make(0.0f));
+        for (const char* slot : { "u_Albedo", "u_Normal", "u_MetalRough", "u_Emissive" })
+            t->Textures.push_back({ slot, "" });
+        return t;
+    }
+
+    static Ref<MaterialTemplate> LoadOrBuildPbrTemplate() {
+        std::error_code ec;
+        fs::path p = RendererLoader::ExecutableDir() / "Shaders" / "PBR.ehmaterialtype";
+        if (fs::exists(p, ec)) {
+            MaterialTemplateImporter imp;
+            auto res = imp.Import(ImportContext(p));
+            if (res.IsSuccess())
+                if (auto t = res.GetAs<MaterialTemplate>()) return t;
+        }
+        ECHELON_LOG_WARN("[Asset] Built-in PBR.ehmaterialtype not found beside the executable — using code fallback.");
+        return BuildPbrTemplateFallback();
+    }
+
     AssetManager& AssetManager::Get() {
         static AssetManager s_Instance;
         return s_Instance;
@@ -46,6 +86,7 @@ namespace Echelon {
         RegisterImporter(CreateRef<OBJImporter>());
         RegisterImporter(CreateRef<SceneImporter>());
         RegisterImporter(CreateRef<ShaderImporter>());
+        RegisterImporter(CreateRef<MaterialTemplateImporter>());
         RegisterImporter(CreateRef<MaterialImporter>());
         RegisterImporter(CreateRef<TextureImporter>());
         RegisterImporter(CreateRef<RenderPipelineImporter>());
@@ -55,39 +96,23 @@ namespace Echelon {
         RegisterPrimitive("Plane",  []() -> Ref<Asset> { return MeshPrimitives::CreatePlane(); });
         RegisterPrimitive("Sphere", []() -> Ref<Asset> { return MeshPrimitives::CreateSphere(); });
 
-        // Built-in default material — backed by whatever shader the active renderer
-        // declares as its default (now PBR.slang). Resolved lazily so the renderer is
-        // guaranteed to be initialised before this lambda first runs. PBR requires its
-        // params to be set (unset members zero-fill → black/occluded), so seed sane ones.
+        // Built-in PBR material template (the standard BRDF). Referenced by name
+        // ("PBR.ehmaterialtype"); GetHandle() matches the primitive name before any file,
+        // so both built-in and project materials resolve to this single template. Loaded
+        // lazily from the shipped file (source of truth) with a code fallback.
+        RegisterPrimitive("PBR.ehmaterialtype", []() -> Ref<Asset> { return LoadOrBuildPbrTemplate(); });
+
+        // Built-in default material — a PBR instance used as the fallback look. PBR requires
+        // its params set (unset members zero-fill → black/occluded), so seed sane ones.
         RegisterPrimitive("DefaultMaterial", []() -> Ref<Asset> {
             auto mat = CreateRef<Material>();
-            if (auto* r = Renderer::Get().GetActive())
-                mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / r->GetDefaultShaderName()).string();
+            mat->TemplateSource = "PBR.ehmaterialtype";
             mat->Params["BaseColor"] = MaterialParam::Make(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
             mat->Params["Metallic"]  = MaterialParam::Make(0.0f);
             mat->Params["Roughness"] = MaterialParam::Make(0.6f);
             mat->Params["Occlusion"] = MaterialParam::Make(1.0f);
             return mat;
         });
-
-        // Widely-used built-in materials, all backed by the standard PBR shader
-        // (shipped next to the executable). Projects reference these by name
-        // (MaterialSource: "PBR" / "Albedo" / "Textured") or author .ehmaterial files
-        // that use `shader:PBR.slang` with their own params.
-        auto makePbr = [](glm::vec4 baseColor, float metallic, float roughness, bool useAlbedoMap) {
-            auto mat = CreateRef<Material>();
-            mat->ShaderSource = (RendererLoader::ExecutableDir() / "Shaders" / "PBR.slang").string();
-            mat->Params["BaseColor"]    = MaterialParam::Make(baseColor);
-            mat->Params["Metallic"]     = MaterialParam::Make(metallic);
-            mat->Params["Roughness"]    = MaterialParam::Make(roughness);
-            mat->Params["Occlusion"]    = MaterialParam::Make(1.0f);
-            mat->Params["NormalScale"]  = MaterialParam::Make(1.0f);
-            if (useAlbedoMap) mat->Params["UseAlbedoMap"] = MaterialParam::Make(1.0f);
-            return mat;
-        };
-        RegisterPrimitive("PBR",      [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), 0.0f, 0.5f, false); });
-        RegisterPrimitive("Albedo",   [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), 0.0f, 0.5f, false); });
-        RegisterPrimitive("Textured", [makePbr]() -> Ref<Asset> { return makePbr(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), 0.0f, 0.5f, true);  });
 
         // Rebuild GPU resources whenever the active renderer (back-end) changes.
         m_RendererListener = Renderer::Get().AddChangeListener(

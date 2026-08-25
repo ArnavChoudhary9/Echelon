@@ -74,8 +74,14 @@ namespace Echelon {
             // Include mesh + material versions for renderables.
             if (const auto* mc = registry->try_get<MeshComponent>(entity))
                 version = HashCombine(version, mc->Version);
-            if (const auto* mat = registry->try_get<MaterialComponent>(entity))
-                version = HashCombine(version, mat->Version);
+            if (const auto* mat = registry->try_get<MaterialComponent>(entity)) {
+                version = HashCombine(version, mat->Version);   // which instance is referenced
+                // Value edits to a shared instance bump Material::Version — fold it so an
+                // inspector edit rebuilds the graph (and re-fetches the re-packed set) for
+                // every object using that instance.
+                if (mat->RuntimeMaterial)
+                    version = HashCombine(version, mat->RuntimeMaterial->Version);
+            }
         }
 
         return version;
@@ -94,8 +100,9 @@ namespace Echelon {
         m_WasRebuilt = false;
 
         if (!scene) {
-            m_DrawCommands.clear();
             m_PipelineGroups.clear();
+            m_TransparentDraws.clear();
+            m_RenderableCount = 0;
             return;
         }
 
@@ -106,7 +113,6 @@ namespace Echelon {
         }
 
         Rebuild(scene, renderer, cache, defaultPipeline, errorPipeline, scenePass);
-        SortAndBatch();
 
         m_LastSceneVersion = currentVersion;
         m_IsDirty    = false;
@@ -117,19 +123,13 @@ namespace Echelon {
     // Rebuild — flatten scene graph into draw commands
     // ------------------------------------------------------------------
 
-    // Resolve a MaterialComponent's asset reference (once per epoch) and, when its
-    // material was (re)resolved — an override edit or an asset epoch bump — (re)build
-    // the per-entity override descriptor set in the renderer's material cache.
-    // Mirrors the mesh resolution: lazy, self-healing via source. Returns the resolved
-    // base material (or null).
+    // Resolve a MaterialComponent's instance-asset reference (once per epoch). Mirrors the
+    // mesh resolution: lazy, self-healing via source. Returns the resolved instance (or null).
     //
-    // The engine does NOT invent a material for meshes that have none — applying a
-    // standard or custom material is the renderer's/user's job. An unresolved material
-    // returns null, so the caller falls back to the renderer's pink error pipeline
-    // (a clear "no material applied / something is wrong" signal).
-    static Ref<Material> ResolveMaterial(uint32_t entityId, MaterialComponent& mc,
-                                         uint64_t epoch, RayMaterialCache& cache,
-                                         RendererAPI* renderer) {
+    // The engine does NOT invent a material for meshes that have none — applying a material
+    // is the renderer's/user's job. An unresolved material returns null, so the caller falls
+    // back to the renderer's pink error pipeline (a clear "something is wrong" signal).
+    static Ref<Material> ResolveMaterial(MaterialComponent& mc, uint64_t epoch) {
         if (mc.MaterialHandle.IsNull() && mc.MaterialSource.empty())
             return nullptr; // no material applied → renderer's error/pink fallback
 
@@ -145,13 +145,6 @@ namespace Echelon {
             }
             mc.RuntimeMaterial = material;
             if (material) mc.MaterialHandle = handle;
-
-            // (Re)build this entity's override set now that its material was resolved.
-            // Sparse per-entity overrides layer over the base material's values.
-            if (material && !mc.Overrides.empty())
-                cache.BuildOverride(entityId, material, mc.Overrides, renderer);
-            else
-                cache.DropOverride(entityId);
         }
         return mc.RuntimeMaterial;
     }
@@ -162,7 +155,9 @@ namespace Echelon {
                                const Ref<Pipeline>& defaultPipeline,
                                const Ref<Pipeline>& errorPipeline,
                                const Ref<RenderPass>& scenePass) {
-        m_DrawCommands.clear();
+        m_PipelineGroups.clear();
+        m_TransparentDraws.clear();
+        m_RenderableCount = 0;
 
         auto registry = scene->GetEntityRegistry().lock();
         if (!registry) return;
@@ -196,6 +191,8 @@ namespace Echelon {
             worldCache[e] = world;
             return world;
         };
+
+        std::vector<DrawCommand> opaque;
 
         // Iterate all entities with both a MeshComponent and TransformComponent
         auto view = registry->view<IDComponent, MeshComponent, TransformComponent>();
@@ -244,93 +241,120 @@ namespace Echelon {
 
             // Material resolution (GPU objects come from the renderer's material cache):
             //  - No MaterialComponent          → renderer's defaultPipeline (draw normally)
-            //  - MaterialComponent resolves     → the material's own pipeline + descriptor set
+            //  - MaterialComponent resolves     → the template's pipeline + instance's set
             //  - MaterialComponent fails        → renderer's errorPipeline (pink / obvious signal)
             cmd.PipelineRef = defaultPipeline;
             if (registry->all_of<MaterialComponent>(entity)) {
-                auto& mat = registry->get<MaterialComponent>(entity);
-                if (!mat.MaterialHandle.IsNull() || !mat.MaterialSource.empty()) {
-                    Ref<Material> resolved = ResolveMaterial(cmd.EntityID, mat,
-                                                             AssetManager::Get().GetEpoch(),
-                                                             cache, renderer);
+                auto& matc = registry->get<MaterialComponent>(entity);
+                if (!matc.MaterialHandle.IsNull() || !matc.MaterialSource.empty()) {
+                    Ref<Material> resolved = ResolveMaterial(matc, AssetManager::Get().GetEpoch());
                     if (resolved) {
                         const auto& gpu = cache.GetOrBuild(resolved, renderer, scenePass);
                         cmd.PipelineRef = gpu.PipelineRef ? gpu.PipelineRef : errorPipeline;
-                        // Per-entity override set if any; otherwise the material's base set.
-                        Ref<DescriptorSet> ov = mat.Overrides.empty()
-                                              ? nullptr : cache.GetOverride(cmd.EntityID);
-                        cmd.MaterialSet = ov ? ov : gpu.Base.Set;
+                        cmd.MaterialSet = gpu.Base.Set;
+                        cmd.Transparent = resolved->Transparent && gpu.PipelineRef;
                     } else {
                         cmd.PipelineRef = errorPipeline;
                     }
                 }
             }
 
-            // Build sort key: pipeline pointer (upper 32) | VB pointer (lower 32)
-            // This groups by pipeline first, then by mesh identity.
-            uintptr_t pipeKey = reinterpret_cast<uintptr_t>(cmd.PipelineRef.get());
-            uintptr_t meshKey = reinterpret_cast<uintptr_t>(cmd.VertexBuffer.get());
-            cmd.SortKey = (static_cast<uint64_t>(pipeKey) << 32)
-                        | (static_cast<uint64_t>(meshKey) & 0xFFFFFFFFULL);
+            ++m_RenderableCount;
 
-            m_DrawCommands.push_back(std::move(cmd));
+            if (cmd.Transparent) {
+                TransparentDraw td;
+                td.PipelineRef  = cmd.PipelineRef;
+                td.MaterialSet  = cmd.MaterialSet;
+                td.VertexBuffer = cmd.VertexBuffer;
+                td.IndexBuffer  = cmd.IndexBuffer;
+                td.VertexCount  = cmd.VertexCount;
+                td.IndexCount   = cmd.IndexCount;
+                td.Transform    = cmd.Transform;
+                td.EntityID     = cmd.EntityID;
+                td.Centroid     = glm::vec3(cmd.Transform[3]);   // world translation proxy
+                m_TransparentDraws.push_back(std::move(td));
+            } else {
+                opaque.push_back(std::move(cmd));
+            }
+        }
+
+        SortAndBatch(opaque);
+    }
+
+    // ------------------------------------------------------------------
+    // SortAndBatch — sort opaque by pipeline → instance set → mesh, and group
+    // into PipelineGroups → InstanceGroups → DrawBatches.
+    // ------------------------------------------------------------------
+
+    void RenderGraph::SortAndBatch(std::vector<DrawCommand>& opaque) {
+        m_PipelineGroups.clear();
+        if (opaque.empty()) return;
+
+        // Sort by pipeline, then material set, then mesh identity (all by pointer). This
+        // keeps equal keys adjacent; the grouping walk below uses real pointer equality.
+        std::sort(opaque.begin(), opaque.end(),
+                  [](const DrawCommand& a, const DrawCommand& b) {
+                      if (a.PipelineRef.get() != b.PipelineRef.get())
+                          return a.PipelineRef.get() < b.PipelineRef.get();
+                      if (a.MaterialSet.get() != b.MaterialSet.get())
+                          return a.MaterialSet.get() < b.MaterialSet.get();
+                      return a.VertexBuffer.get() < b.VertexBuffer.get();
+                  });
+
+        Pipeline*      curPipe = nullptr;
+        DescriptorSet* curSet  = nullptr;
+        void*          curVB   = nullptr;
+        void*          curIB   = nullptr;
+        PipelineGroup* group   = nullptr;
+        InstanceGroup* inst    = nullptr;
+        DrawBatch*     batch   = nullptr;
+        bool           first   = true;
+
+        for (const auto& cmd : opaque) {
+            if (first || cmd.PipelineRef.get() != curPipe) {
+                m_PipelineGroups.push_back({ cmd.PipelineRef, {} });
+                group   = &m_PipelineGroups.back();
+                curPipe = cmd.PipelineRef.get();
+                curSet  = nullptr; inst = nullptr;
+                curVB   = nullptr; curIB = nullptr; batch = nullptr;
+            }
+
+            if (inst == nullptr || cmd.MaterialSet.get() != curSet) {
+                group->Instances.push_back({ cmd.MaterialSet, {} });
+                inst   = &group->Instances.back();
+                curSet = cmd.MaterialSet.get();
+                curVB  = nullptr; curIB = nullptr; batch = nullptr;
+            }
+
+            void* vbPtr = static_cast<void*>(cmd.VertexBuffer.get());
+            void* ibPtr = static_cast<void*>(cmd.IndexBuffer.get());
+            if (batch == nullptr || vbPtr != curVB || ibPtr != curIB) {
+                inst->Batches.push_back({});
+                batch = &inst->Batches.back();
+                batch->VertexBuffer = cmd.VertexBuffer;
+                batch->IndexBuffer  = cmd.IndexBuffer;
+                batch->VertexCount  = cmd.VertexCount;
+                batch->IndexCount   = cmd.IndexCount;
+                curVB = vbPtr; curIB = ibPtr;
+            }
+
+            batch->Transforms.push_back(cmd.Transform);
+            batch->EntityIDs.push_back(cmd.EntityID);
+            first = false;
         }
     }
 
     // ------------------------------------------------------------------
-    // SortAndBatch — sort by pipeline → mesh, group into PipelineGroups
+    // SortTransparent — back-to-front by camera distance (per frame, cheap)
     // ------------------------------------------------------------------
 
-    void RenderGraph::SortAndBatch() {
-        m_PipelineGroups.clear();
-
-        if (m_DrawCommands.empty()) return;
-
-        // Sort by SortKey (pipeline first, then mesh identity)
-        std::sort(m_DrawCommands.begin(), m_DrawCommands.end(),
-                  [](const DrawCommand& a, const DrawCommand& b) {
-                      return a.SortKey < b.SortKey;
+    void RenderGraph::SortTransparent(const glm::vec3& cameraPos) {
+        std::sort(m_TransparentDraws.begin(), m_TransparentDraws.end(),
+                  [&](const TransparentDraw& a, const TransparentDraw& b) {
+                      float da = glm::dot(a.Centroid - cameraPos, a.Centroid - cameraPos);
+                      float db = glm::dot(b.Centroid - cameraPos, b.Centroid - cameraPos);
+                      return da > db;   // farthest first
                   });
-
-        // Walk sorted commands and group into pipeline groups → draw batches
-        Ref<Pipeline> currentPipeline = nullptr;
-        PipelineGroup* currentGroup   = nullptr;
-
-        void* currentVB = nullptr;
-        void* currentIB = nullptr;
-        DrawBatch* currentBatch = nullptr;
-
-        for (const auto& cmd : m_DrawCommands) {
-            // New pipeline group?
-            if (cmd.PipelineRef != currentPipeline) {
-                m_PipelineGroups.push_back({ cmd.PipelineRef, {} });
-                currentGroup    = &m_PipelineGroups.back();
-                currentPipeline = cmd.PipelineRef;
-                currentVB       = nullptr;  // Force new batch
-                currentIB       = nullptr;
-                currentBatch    = nullptr;
-            }
-
-            // New mesh batch within the current pipeline group?
-            void* vbPtr = static_cast<void*>(cmd.VertexBuffer.get());
-            void* ibPtr = static_cast<void*>(cmd.IndexBuffer.get());
-
-            if (vbPtr != currentVB || ibPtr != currentIB) {
-                currentGroup->Batches.push_back({});
-                currentBatch = &currentGroup->Batches.back();
-                currentBatch->VertexBuffer = cmd.VertexBuffer;
-                currentBatch->IndexBuffer  = cmd.IndexBuffer;
-                currentBatch->VertexCount  = cmd.VertexCount;
-                currentBatch->IndexCount   = cmd.IndexCount;
-                currentVB = vbPtr;
-                currentIB = ibPtr;
-            }
-
-            // Append instance data (parallel arrays: transform + its material set + entity id)
-            currentBatch->Transforms.push_back(cmd.Transform);
-            currentBatch->MaterialSets.push_back(cmd.MaterialSet);
-            currentBatch->EntityIDs.push_back(cmd.EntityID);
-        }
     }
 
 } // namespace Echelon
